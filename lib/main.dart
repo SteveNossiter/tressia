@@ -1,0 +1,63 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'theme/app_theme.dart';
+import 'providers/app_state.dart';
+import 'screens/home_screen.dart';
+import 'screens/auth_screen.dart';
+import 'services/encryption_service.dart';
+
+// IMPORTANT: Supabase URL and Anon / Publishable Key
+const supabaseUrl = 'https://dfwpvvppdnpyrvnoccni.supabase.co';
+const supabaseAnonKey = 'sb_publishable_FTGBQ79nE2DvdSBkU4D-gQ_lV5Gj1wY';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  );
+  
+  await EncryptionService.init();
+  runApp(const ProviderScope(child: TressiaApp()));
+}
+
+class TressiaApp extends ConsumerWidget {
+  const TressiaApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final uiMode = ref.watch(themeModeProvider);
+
+    return MaterialApp(
+      title: 'Tressia',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.getTheme(uiMode),
+      home: const AuthGate(),
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        
+        final session = snapshot.data?.session;
+        if (session != null) {
+          return const HomeScreen();
+        }
+        
+        return const AuthScreen();
+      },
+    );
+  }
+}

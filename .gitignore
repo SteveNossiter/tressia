@@ -1,0 +1,53 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+
+# iOS/macOS
+ios/Pods/
+ios/.symlinks/
+macos/Pods/
+macos/.symlinks/
+*.mode1v3
+*.mode2v3
+*.moved-aside
+*.pbxuser
+*.perspectivev3
+**/*.xccheckout
+**/Contents/PkgInfo
+**/DerivedData/
+**/IDEConfig/
+**/Messages/
+**/SharedPrecompiledHeaders/
+**/XCBuildData/
+**/*.xcworkspace
+**/xcuserdata/
+**/ExportOptions.plist
+**/DerivedData/
+**/Pods/
+
+# Android
+android/local.properties
+android/key.properties
+android/app/*.jks
+android/app/*.keystore
+android/app/*.p12
+android/app/*.txt
+**/generated/
+
+# Secret files
+.env*
+.env
+supabase_key.txt
+
+# Editors
+.vscode/
+.idea/
+*.iml
+*.iws
+
+# Misc
+.DS_Store
+*.log
