@@ -48,18 +48,18 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        
-        final session = snapshot.data?.session;
-        final user = session?.user;
-        
+        // Use either the stream event or the current session as fallback
+        // This prevents the infinite spinner on initial web load
+        final session = snapshot.data?.session ??
+            Supabase.instance.client.auth.currentSession;
+        final user = session?.user ??
+            Supabase.instance.client.auth.currentUser;
+
         // Ensure email is confirmed before allowing them through
         if (session != null && user?.emailConfirmedAt != null) {
           return const SetupGate(child: HomeScreen());
         }
-        
+
         return const AuthScreen();
       },
     );
