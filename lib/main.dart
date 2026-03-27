@@ -52,7 +52,10 @@ class AuthGate extends StatelessWidget {
         }
         
         final session = snapshot.data?.session;
-        if (session != null) {
+        final user = session?.user;
+        
+        // Ensure email is confirmed before allowing them through
+        if (session != null && user?.emailConfirmedAt != null) {
           return const SetupGate(child: HomeScreen());
         }
         

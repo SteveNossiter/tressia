@@ -12,10 +12,14 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _nameController = TextEditingController();
+  
   bool _isLoading = false;
   bool _isSignUp = false;
   bool _showVerificationMessage = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   String? _errorMessage;
 
   Future<void> _handleAuth() async {
@@ -26,14 +30,27 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isSignUp) {
+        // Validation for registration
+        if (_nameController.text.trim().isEmpty) {
+          throw Exception('Please enter your full name');
+        }
+        if (_passwordController.text != _confirmPasswordController.text) {
+          throw Exception('Passwords do not match');
+        }
+        if (_passwordController.text.length < 6) {
+          throw Exception('Password must be at least 6 characters');
+        }
+
         // Sign up logic with user metadata
-        await Supabase.instance.client.auth.signUp(
+        final response = await Supabase.instance.client.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text,
           data: {
             'full_name': _nameController.text.trim(),
           },
         );
+        
+        // If email confirmation is enabled, session might be null or user.emailConfirmedAt will be null
         if (mounted) {
           setState(() {
             _showVerificationMessage = true;
@@ -45,7 +62,6 @@ class _AuthScreenState extends State<AuthScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        // On success, the StreamBuilder in main.dart handles the routing!
       }
     } on AuthException catch (e) {
       if (mounted) {
@@ -53,7 +69,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = 'An unexpected error occurred: $e');
+        setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {
@@ -66,6 +82,7 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _nameController.dispose();
     super.dispose();
   }
@@ -74,7 +91,6 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
     final brandGreen = const Color(0xFF2E7D32);
     
     return Scaffold(
@@ -136,6 +152,8 @@ class _AuthScreenState extends State<AuthScreen> {
               setState(() {
                 _showVerificationMessage = false;
                 _isSignUp = false;
+                _passwordController.clear();
+                _confirmPasswordController.clear();
               });
             },
             style: ElevatedButton.styleFrom(
@@ -143,7 +161,7 @@ class _AuthScreenState extends State<AuthScreen> {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: Text('LOG IN', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            child: Text('BACK TO LOG IN', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
           ),
         ),
       ],
@@ -158,25 +176,15 @@ class _AuthScreenState extends State<AuthScreen> {
         Text(
           'Tressia',
           textAlign: TextAlign.center,
-          style: GoogleFonts.lora(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface,
-            letterSpacing: -0.5,
-          ),
+          style: GoogleFonts.lora(fontSize: 32, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
         ),
         const SizedBox(height: 8),
         Text(
           'Therapeutic Dashboard',
           textAlign: TextAlign.center,
-          style: GoogleFonts.outfit(
-            fontSize: 14,
-            color: theme.hintColor,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w500,
-          ),
+          style: GoogleFonts.outfit(fontSize: 14, color: theme.hintColor, letterSpacing: 1.5),
         ),
-        const SizedBox(height: 48),
+        const SizedBox(height: 40),
 
         if (_errorMessage != null)
           Container(
@@ -187,10 +195,7 @@ class _AuthScreenState extends State<AuthScreen> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
             ),
-            child: Text(
-              _errorMessage!,
-              style: GoogleFonts.outfit(color: Colors.red[400], fontSize: 13),
-            ),
+            child: Text(_errorMessage!, style: GoogleFonts.outfit(color: Colors.red[400], fontSize: 13)),
           ),
 
         if (_isSignUp) ...[
@@ -212,10 +217,41 @@ class _AuthScreenState extends State<AuthScreen> {
 
         TextFormField(
           controller: _passwordController,
-          obscureText: true,
+          obscureText: _obscurePassword,
           style: GoogleFonts.outfit(color: theme.colorScheme.onSurface),
-          decoration: _inputDecoration(theme, 'Password', Icons.lock_outline, brandGreen, isDark),
+          decoration: _inputDecoration(
+            theme, 
+            'Password', 
+            Icons.lock_outline, 
+            brandGreen, 
+            isDark,
+            suffix: IconButton(
+              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: theme.hintColor, size: 20),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            ),
+          ),
         ),
+        
+        if (_isSignUp) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _confirmPasswordController,
+            obscureText: _obscureConfirmPassword,
+            style: GoogleFonts.outfit(color: theme.colorScheme.onSurface),
+            decoration: _inputDecoration(
+              theme, 
+              'Confirm Password', 
+              Icons.lock_reset, 
+              brandGreen, 
+              isDark,
+              suffix: IconButton(
+                icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility, color: theme.hintColor, size: 20),
+                onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+              ),
+            ),
+          ),
+        ],
+
         const SizedBox(height: 32),
 
         SizedBox(
@@ -225,19 +261,11 @@ class _AuthScreenState extends State<AuthScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: brandGreen,
               foregroundColor: Colors.white,
-              elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                : Text(
-                    _isSignUp ? 'REGISTER' : 'LOG IN',
-                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                  ),
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text(_isSignUp ? 'REGISTER' : 'LOG IN', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
           ),
         ),
         const SizedBox(height: 16),
@@ -249,21 +277,21 @@ class _AuthScreenState extends State<AuthScreen> {
               _errorMessage = null;
             });
           },
-          style: TextButton.styleFrom(foregroundColor: theme.hintColor),
           child: Text(
             _isSignUp ? 'Already have an account? Log in' : 'Need provider access? Sign up',
-            style: GoogleFonts.outfit(fontSize: 13),
+            style: GoogleFonts.outfit(fontSize: 13, color: theme.hintColor),
           ),
         ),
       ],
     );
   }
 
-  InputDecoration _inputDecoration(ThemeData theme, String label, IconData icon, Color brandGreen, bool isDark) {
+  InputDecoration _inputDecoration(ThemeData theme, String label, IconData icon, Color brandGreen, bool isDark, {Widget? suffix}) {
     return InputDecoration(
       labelText: label,
       labelStyle: GoogleFonts.outfit(color: theme.hintColor),
       prefixIcon: Icon(icon, color: theme.hintColor),
+      suffixIcon: suffix,
       filled: true,
       fillColor: isDark ? Colors.black26 : Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
