@@ -18,6 +18,10 @@ class CurrentUserNotifier extends Notifier<AppUser> {
   AppUser build() {
     final authUser = Supabase.instance.client.auth.currentUser;
     if (authUser != null) {
+      // Immediate fetch to avoid waiting for the stream
+      _fetchUser(authUser.id);
+
+      // Also listen for real-time updates
       Supabase.instance.client
           .from('users')
           .stream(primaryKey: ['id'])
@@ -47,6 +51,22 @@ class CurrentUserNotifier extends Notifier<AppUser> {
       setupComplete: true, // assume true until loaded to avoid flash
     );
   }
+
+  Future<void> _fetchUser(String userId) async {
+    try {
+      final data = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+      if (data != null) {
+        state = _mapToAppUser(data);
+      }
+    } catch (_) {
+      // Stream will catch up
+    }
+  }
+
 
   void setUser(AppUser u) => state = u;
 
@@ -125,6 +145,10 @@ class ClinicSettingsNotifier extends Notifier<ClinicSettings> {
   ClinicSettings build() {
     final user = ref.watch(currentUserProvider);
     if (user.clinicId.isNotEmpty) {
+      // Immediate fetch
+      _fetchClinic(user.clinicId);
+
+      // Also listen for real-time updates
       Supabase.instance.client
           .from('clinics')
           .stream(primaryKey: ['id'])
@@ -142,6 +166,22 @@ class ClinicSettingsNotifier extends Notifier<ClinicSettings> {
       clinicName: 'Loading...',
     );
   }
+
+  Future<void> _fetchClinic(String clinicId) async {
+    try {
+      final data = await Supabase.instance.client
+          .from('clinics')
+          .select()
+          .eq('id', clinicId)
+          .maybeSingle();
+      if (data != null) {
+        state = _mapToClinicSettings(data);
+      }
+    } catch (_) {
+      // Stream will catch up
+    }
+  }
+
 
   Future<void> updateSettings(ClinicSettings s) async {
     await Supabase.instance.client.from('clinics').update({
