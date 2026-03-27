@@ -66,17 +66,70 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-class SetupGate extends ConsumerWidget {
+class SetupGate extends ConsumerStatefulWidget {
   final Widget child;
   const SetupGate({super.key, required this.child});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SetupGate> createState() => _SetupGateState();
+}
+
+class _SetupGateState extends ConsumerState<SetupGate> {
+  bool _timedOut = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted) setState(() => _timedOut = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final clinic = ref.watch(clinicSettingsProvider);
 
     // Wait for data to load
     if (user.clinicId.isEmpty || clinic.id.isEmpty) {
+      if (_timedOut) {
+        return Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.orange),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Unable to load your account data.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your user profile may not have been created correctly. '
+                    'Please try logging out and registering again, or contact support.\n\n'
+                    'Debug: clinicId="${user.clinicId}", userId="${user.id}"',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => Supabase.instance.client.auth.signOut(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('LOG OUT'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
@@ -84,6 +137,7 @@ class SetupGate extends ConsumerWidget {
       return ClinicSetupScreen();
     }
 
-    return child;
+    return widget.child;
   }
 }
+
