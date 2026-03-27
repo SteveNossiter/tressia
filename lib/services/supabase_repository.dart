@@ -224,10 +224,6 @@ class SupabaseRepository {
     await _client.from('sessions').delete().eq('id', id);
   }
 
-  Future<void> deleteSession(String id) async {
-    await _client.from('sessions').delete().eq('id', id);
-  }
-
   // ---------------------------------------------------------------------------
   // HELPERS
   // ---------------------------------------------------------------------------

@@ -78,6 +78,10 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
     }
     return [];
   }
+
+  void addUser(AppUser u) {}
+  void updateUser(AppUser u) {}
+  void removeUser(String id) {}
 }
 
 AppUser _mapToAppUser(Map<String, dynamic> data) {
@@ -139,7 +143,7 @@ class ClinicSettingsNotifier extends Notifier<ClinicSettings> {
     );
   }
 
-  void updateSettings(ClinicSettings s) async {
+  Future<void> updateSettings(ClinicSettings s) async {
     await Supabase.instance.client.from('clinics').update({
       'name': s.clinicName,
       'description': s.description,

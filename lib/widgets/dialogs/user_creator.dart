@@ -33,11 +33,11 @@ class _UserCreatorState extends ConsumerState<UserCreator> {
     if (_firstCtrl.text.isEmpty || _emailCtrl.text.isEmpty) return;
 
     final fullName = '${_firstCtrl.text} ${_lastCtrl.text}'.trim();
-    ref
-        .read(systemUsersProvider.notifier)
-        .addUser(
+    final currentUser = ref.read(currentUserProvider);
+    ref.read(systemUsersProvider.notifier).addUser(
           AppUser(
             id: 'u_${DateTime.now().millisecondsSinceEpoch}',
+            clinicId: currentUser.clinicId,
             name: fullName,
             firstName: _firstCtrl.text.trim(),
             lastName: _lastCtrl.text.trim(),

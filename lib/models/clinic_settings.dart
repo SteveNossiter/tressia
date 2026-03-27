@@ -90,26 +90,28 @@ class AppUser {
     String? ahpraNumber,
     String? qualifications,
     String? notes,
-    String? passwordHash,
-    bool? twoFactorEnabled,
-  }) => AppUser(
-    id: id,
-    name: name ?? this.name,
-    firstName: firstName ?? this.firstName,
-    lastName: lastName ?? this.lastName,
-    role: role ?? this.role,
-    userColor: userColor ?? this.userColor,
-    email: email ?? this.email,
-    phone: phone ?? this.phone,
-    address: address ?? this.address,
-    base64Photo: base64Photo ?? this.base64Photo,
-    startDate: startDate ?? this.startDate,
-    ahpraNumber: ahpraNumber ?? this.ahpraNumber,
-    qualifications: qualifications ?? this.qualifications,
-    notes: notes ?? this.notes,
-    passwordHash: passwordHash ?? this.passwordHash,
-    twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
-  );
+    bool? setupComplete,
+  }) =>
+      AppUser(
+        id: id,
+        clinicId: clinicId,
+        name: name ?? this.name,
+        firstName: firstName ?? this.firstName,
+        lastName: lastName ?? this.lastName,
+        role: role ?? this.role,
+        userColor: userColor ?? this.userColor,
+        email: email ?? this.email,
+        phone: phone ?? this.phone,
+        address: address ?? this.address,
+        base64Photo: base64Photo ?? this.base64Photo,
+        startDate: startDate ?? this.startDate,
+        ahpraNumber: ahpraNumber ?? this.ahpraNumber,
+        qualifications: qualifications ?? this.qualifications,
+        notes: notes ?? this.notes,
+        passwordHash: passwordHash ?? this.passwordHash,
+        twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
+        setupComplete: setupComplete ?? this.setupComplete,
+      );
 }
 
 // =============================================
@@ -180,19 +182,22 @@ class ClinicSettings {
     String? address,
     String? phone,
     String? email,
-    String? base64Logo,
+    bool? setupComplete,
     int? dailyReportHour,
     int? weeklyReportDay,
     int? weeklyReportHour,
-  }) => ClinicSettings(
-    clinicName: clinicName ?? this.clinicName,
-    description: description ?? this.description,
-    address: address ?? this.address,
-    phone: phone ?? this.phone,
-    email: email ?? this.email,
-    base64Logo: base64Logo ?? this.base64Logo,
-    dailyReportHour: dailyReportHour ?? this.dailyReportHour,
-    weeklyReportDay: weeklyReportDay ?? this.weeklyReportDay,
-    weeklyReportHour: weeklyReportHour ?? this.weeklyReportHour,
-  );
+  }) =>
+      ClinicSettings(
+        id: id,
+        clinicName: clinicName ?? this.clinicName,
+        description: description ?? this.description,
+        address: address ?? this.address,
+        phone: phone ?? this.phone,
+        email: email ?? this.email,
+        base64Logo: base64Logo ?? this.base64Logo,
+        setupComplete: setupComplete ?? this.setupComplete,
+        dailyReportHour: dailyReportHour ?? this.dailyReportHour,
+        weeklyReportDay: weeklyReportDay ?? this.weeklyReportDay,
+        weeklyReportHour: weeklyReportHour ?? this.weeklyReportHour,
+      );
 }

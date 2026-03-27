@@ -5,6 +5,7 @@ import 'theme/app_theme.dart';
 import 'providers/app_state.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
+import 'screens/clinic_setup_screen.dart';
 import 'services/encryption_service.dart';
 
 // IMPORTANT: Supabase URL and Anon / Publishable Key
@@ -80,7 +81,7 @@ class SetupGate extends ConsumerWidget {
     }
 
     if (!user.setupComplete || !clinic.setupComplete) {
-      return const ClinicSetupScreen();
+      return ClinicSetupScreen();
     }
 
     return child;
