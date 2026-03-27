@@ -182,6 +182,7 @@ class ClinicSettings {
     String? address,
     String? phone,
     String? email,
+    String? base64Logo,
     bool? setupComplete,
     int? dailyReportHour,
     int? weeklyReportDay,
