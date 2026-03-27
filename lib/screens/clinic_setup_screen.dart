@@ -24,16 +24,25 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
   late TextEditingController _addressCtrl;
   late TextEditingController _phoneCtrl;
   late TextEditingController _emailCtrl;
+  late TextEditingController _userFirstNameCtrl;
+  late TextEditingController _userLastNameCtrl;
+  late TextEditingController _userAhpraCtrl;
 
   @override
   void initState() {
     super.initState();
     final current = ref.read(clinicSettingsProvider);
+    final user = ref.read(currentUserProvider);
+
     _nameCtrl = TextEditingController(text: current.clinicName);
     _descCtrl = TextEditingController(text: current.description);
     _addressCtrl = TextEditingController(text: current.address);
     _phoneCtrl = TextEditingController(text: current.phone);
     _emailCtrl = TextEditingController(text: current.email);
+
+    _userFirstNameCtrl = TextEditingController(text: user.firstName);
+    _userLastNameCtrl = TextEditingController(text: user.lastName);
+    _userAhpraCtrl = TextEditingController(text: user.ahpraNumber);
   }
 
   Future<void> _pickLogo() async {
@@ -78,11 +87,42 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
     ).showSnackBar(const SnackBar(content: Text('Clinic Settings Saved')));
   }
 
+  Future<void> _logout() async {
+    await Supabase.instance.client.auth.signOut();
+  }
+
+  void _completeSetup() async {
+    final currentUser = ref.read(currentUserProvider);
+    final currentClinic = ref.read(clinicSettingsProvider);
+
+    // Save Personal Details
+    await Supabase.instance.client.from('users').update({
+      'full_name': '${_userFirstNameCtrl.text} ${_userLastNameCtrl.text}'.trim(),
+      'setup_complete': true,
+    }).eq('id', currentUser.id);
+
+    // Save Clinic Details (if admin)
+    if (currentUser.isAdmin) {
+      await ref.read(clinicSettingsProvider.notifier).updateSettings(
+            currentClinic.copyWith(
+              clinicName: _nameCtrl.text,
+              description: _descCtrl.text,
+              address: _addressCtrl.text,
+              phone: _phoneCtrl.text,
+              email: _emailCtrl.text,
+              setupComplete: true,
+            ),
+          );
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Initial Setup Complete!')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final currentSettings = ref.watch(clinicSettingsProvider);
-    final systemUsers = ref.watch(systemUsersProvider);
     final currentUser = ref.watch(currentUserProvider);
     final isAdmin = currentUser.isAdmin;
 
@@ -91,24 +131,15 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
         slivers: [
           SliverAppBar(
             title: Text(
-              'Clinic Configuration',
+              'Initial Account Setup',
               style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
             ),
             floating: true,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.print_outlined),
-                onPressed: () => DocumentGenerator.generateBlankLetterhead(
-                  context: context,
-                  settings: currentSettings,
-                ),
-                tooltip: 'Print Blank Letterhead',
+              TextButton(
+                onPressed: _logout,
+                child: Text('LOGOUT', style: GoogleFonts.outfit(color: Colors.red)),
               ),
-              if (isAdmin)
-                IconButton(
-                  icon: const Icon(Icons.check),
-                  onPressed: _saveSettings,
-                ),
             ],
           ),
           SliverList(
@@ -118,160 +149,94 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Branding & Description',
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: _pickLogo,
-                      child: Container(
-                        height: 120,
-                        width: 120,
-                        decoration: BoxDecoration(
-                          color: theme.cardTheme.color,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: theme.dividerColor.withOpacity(0.2),
-                          ),
-                        ),
-                        child: currentSettings.base64Logo != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Image.memory(
-                                  base64Decode(currentSettings.base64Logo!),
-                                  fit: BoxFit.contain,
-                                ),
-                              )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.add_photo_alternate,
-                                    size: 32,
-                                    color: theme.hintColor,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Upload Logo',
-                                    style: GoogleFonts.outfit(
-                                      color: theme.hintColor,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
+                    // PERSONAL SECTION
+                    _sectionHeader(theme, '1. Personal Profile'),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: _descCtrl,
-                      enabled: isAdmin,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Clinic Description (Internal)',
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    Text(
-                      'Contact Details',
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _nameCtrl,
-                      enabled: isAdmin,
-                      decoration: const InputDecoration(
-                        labelText: 'Clinic Name',
-                      ),
+                      controller: _userFirstNameCtrl,
+                      decoration: const InputDecoration(labelText: 'First Name'),
                     ),
                     const SizedBox(height: 8),
                     TextField(
-                      controller: _addressCtrl,
-                      enabled: isAdmin,
-                      decoration: const InputDecoration(labelText: 'Address'),
+                      controller: _userLastNameCtrl,
+                      decoration: const InputDecoration(labelText: 'Last Name'),
                     ),
                     const SizedBox(height: 8),
                     TextField(
-                      controller: _phoneCtrl,
-                      enabled: isAdmin,
-                      decoration: const InputDecoration(labelText: 'Phone'),
+                      controller: _userAhpraCtrl,
+                      decoration: const InputDecoration(labelText: 'AHPRA Number (if applicable)'),
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _emailCtrl,
-                      enabled: isAdmin,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                    ),
+                    
                     const SizedBox(height: 48),
 
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'System Directory',
-                          style: GoogleFonts.outfit(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.primaryColor,
-                          ),
+                    // CLINIC SECTION (Only for App Admins/Registrants)
+                    if (isAdmin) ...[
+                      _sectionHeader(theme, '2. Clinic Identity'),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(labelText: 'Clinic / Business Name'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _descCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'Short Description'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _addressCtrl,
+                        decoration: const InputDecoration(labelText: 'Clinic Address'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _phoneCtrl,
+                        decoration: const InputDecoration(labelText: 'Contact Phone'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _emailCtrl,
+                        decoration: const InputDecoration(labelText: 'Public Email'),
+                      ),
+                    ],
+
+                    const SizedBox(height: 64),
+                    
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _completeSetup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.primaryColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
-                        if (isAdmin)
-                          TextButton.icon(
-                            onPressed: () =>
-                                showGlassDialog(context, const UserCreator()),
-                            icon: const Icon(Icons.person_add),
-                            label: const Text("Add User"),
-                          ),
-                      ],
+                        child: Text(
+                          'COMPLETE SETUP & START',
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    ...systemUsers
-                        .map(
-                          (u) => Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: u.userColor.withOpacity(0.2),
-                                child: Icon(Icons.person, color: u.userColor),
-                              ),
-                              title: Text(
-                                u.name,
-                                style: GoogleFonts.outfit(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Text(
-                                u.role.name.toUpperCase(),
-                                style: GoogleFonts.outfit(
-                                  fontSize: 11,
-                                  color: theme.hintColor,
-                                ),
-                              ),
-                              trailing: isAdmin
-                                  ? IconButton(
-                                      icon: const Icon(Icons.edit, size: 16),
-                                      onPressed: () {},
-                                    )
-                                  : null,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                    
+                    const SizedBox(height: 100),
                   ],
                 ),
               ),
             ]),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(ThemeData theme, String title) {
+    return Text(
+      title,
+      style: GoogleFonts.outfit(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: theme.primaryColor,
       ),
     );
   }

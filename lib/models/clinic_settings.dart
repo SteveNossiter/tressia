@@ -14,6 +14,7 @@ enum UserRole { admin, administrator, therapist, receptionist }
 // =============================================
 class AppUser {
   final String id;
+  final String clinicId;
   final String name;
   final String firstName;
   final String lastName;
@@ -33,11 +34,13 @@ class AppUser {
   final String notes;
 
   // Auth
+  final bool setupComplete;
   final String passwordHash; // Stored hashed password
   final bool twoFactorEnabled;
 
   AppUser({
     required this.id,
+    required this.clinicId,
     required this.name,
     this.firstName = '',
     this.lastName = '',
@@ -53,6 +56,7 @@ class AppUser {
     this.notes = '',
     this.passwordHash = '',
     this.twoFactorEnabled = false,
+    this.setupComplete = false,
   });
 
   bool get isAdmin => role == UserRole.admin || role == UserRole.administrator;
@@ -141,12 +145,14 @@ class AssignmentRequest {
 // CLINIC SETTINGS
 // =============================================
 class ClinicSettings {
+  final String id;
   final String clinicName;
   final String description;
   final String address;
   final String phone;
   final String email;
   final String? base64Logo;
+  final bool setupComplete;
 
   // Reporting prefs
   final int dailyReportHour; // 0-23
@@ -154,6 +160,7 @@ class ClinicSettings {
   final int weeklyReportHour;
 
   ClinicSettings({
+    required this.id,
     this.clinicName = 'Tressia Art Therapy',
     this.description =
         'A warm, nurturing art therapy clinic supporting creative healing and self-expression.',
@@ -161,6 +168,7 @@ class ClinicSettings {
     this.phone = '',
     this.email = '',
     this.base64Logo,
+    this.setupComplete = false,
     this.dailyReportHour = 19, // 7pm
     this.weeklyReportDay = 5, // Friday
     this.weeklyReportHour = 19, // 7pm

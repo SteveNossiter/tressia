@@ -53,11 +53,33 @@ class AuthGate extends StatelessWidget {
         
         final session = snapshot.data?.session;
         if (session != null) {
-          return const HomeScreen();
+          return const SetupGate(child: HomeScreen());
         }
         
         return const AuthScreen();
       },
     );
+  }
+}
+
+class SetupGate extends ConsumerWidget {
+  final Widget child;
+  const SetupGate({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final clinic = ref.watch(clinicSettingsProvider);
+
+    // Wait for data to load
+    if (user.clinicId.isEmpty || clinic.id.isEmpty) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (!user.setupComplete || !clinic.setupComplete) {
+      return const ClinicSetupScreen();
+    }
+
+    return child;
   }
 }

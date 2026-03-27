@@ -8,37 +8,50 @@ class SupabaseRepository {
   // ---------------------------------------------------------------------------
   // PROJECTS (Clients/Phases)
   // ---------------------------------------------------------------------------
-  Stream<List<Project>> streamProjects() {
-    return _client.from('projects').stream(primaryKey: ['id']).map((dataList) {
-      return dataList.map((data) => Project(
-        id: data['id'],
-        title: data['title'] ?? '',
-        clientId: data['client_id'] ?? '',
-        firstName: data['first_name'] ?? '',
-        lastName: data['last_name'] ?? '',
-        clientType: data['client_type'] ?? 'Private',
-        assignedTherapistIds: (data['assigned_therapist_ids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-        notes: data['notes'] ?? '',
-        startDate: DateTime.parse(data['start_date']),
-        endDate: DateTime.parse(data['end_date']),
-      )).toList();
-    });
+  Stream<List<Project>> streamProjects(String clinicId) {
+    return _client
+        .from('projects')
+        .stream(primaryKey: ['id'])
+        .eq('clinic_id', clinicId)
+        .map((dataList) {
+          return dataList
+              .map(
+                (data) => Project(
+                  id: data['id'],
+                  title: data['title'] ?? '',
+                  clientId: data['client_id'] ?? '',
+                  firstName: data['first_name'] ?? '',
+                  lastName: data['last_name'] ?? '',
+                  clientType: data['client_type'] ?? 'Private',
+                  assignedTherapistIds:
+                      (data['assigned_therapist_ids'] as List<dynamic>?)
+                          ?.map((e) => e.toString())
+                          .toList() ??
+                      [],
+                  notes: data['notes'] ?? '',
+                  startDate: DateTime.parse(data['start_date']),
+                  endDate: DateTime.parse(data['end_date']),
+                ),
+              )
+              .toList();
+        });
   }
 
-  Future<void> saveProject(Project p) async {
-    // If empty list, we default to the currently logged in user so they don't lock themselves out!
-    List<String> assignIds = p.assignedTherapistIds.isNotEmpty 
-        ? p.assignedTherapistIds 
-        : [_client.auth.currentUser?.id ?? ''];
+  Future<void> saveProject(Project p, String clinicId) async {
+    List<String> assignIds =
+        p.assignedTherapistIds.isNotEmpty
+            ? p.assignedTherapistIds
+            : [_client.auth.currentUser?.id ?? ''];
 
     await _client.from('projects').upsert({
       'id': p.id,
+      'clinic_id': clinicId,
       'title': p.title,
       'client_id': p.clientId,
       'first_name': p.firstName,
       'last_name': p.lastName,
       'client_type': p.clientType,
-      'assigned_therapist_ids': assignIds, 
+      'assigned_therapist_ids': assignIds,
       'notes': p.notes,
       'start_date': p.startDate.toIso8601String(),
       'end_date': p.endDate.toIso8601String(),
@@ -52,27 +65,41 @@ class SupabaseRepository {
   // ---------------------------------------------------------------------------
   // TASKS
   // ---------------------------------------------------------------------------
-  Stream<List<ProjectTask>> streamTasks() {
-    return _client.from('tasks').stream(primaryKey: ['id']).map((dataList) {
-      return dataList.map((data) => ProjectTask(
-        id: data['id'],
-        projectId: data['project_id'],
-        title: data['title'] ?? '',
-        description: data['description'] ?? '',
-        status: _parseTaskStatus(data['status']),
-        startDate: DateTime.parse(data['start_date']),
-        endDate: DateTime.parse(data['end_date']),
-        assignedUserIds: (data['assigned_user_ids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-      )).toList();
-    });
+  Stream<List<ProjectTask>> streamTasks(String clinicId) {
+    return _client
+        .from('tasks')
+        .stream(primaryKey: ['id'])
+        .eq('clinic_id', clinicId)
+        .map((dataList) {
+          return dataList
+              .map(
+                (data) => ProjectTask(
+                  id: data['id'],
+                  projectId: data['project_id'],
+                  title: data['title'] ?? '',
+                  description: data['description'] ?? '',
+                  status: _parseTaskStatus(data['status']),
+                  startDate: DateTime.parse(data['start_date']),
+                  endDate: DateTime.parse(data['end_date']),
+                  assignedUserIds:
+                      (data['assigned_user_ids'] as List<dynamic>?)
+                          ?.map((e) => e.toString())
+                          .toList() ??
+                      [],
+                ),
+              )
+              .toList();
+        });
   }
 
-  Future<void> saveTask(ProjectTask t) async {
-     List<String> assignIds = t.assignedUserIds.isNotEmpty 
-        ? t.assignedUserIds 
-        : [_client.auth.currentUser?.id ?? ''];
+  Future<void> saveTask(ProjectTask t, String clinicId) async {
+    List<String> assignIds =
+        t.assignedUserIds.isNotEmpty
+            ? t.assignedUserIds
+            : [_client.auth.currentUser?.id ?? ''];
     await _client.from('tasks').upsert({
       'id': t.id,
+      'clinic_id': clinicId,
       'project_id': t.projectId,
       'title': t.title,
       'description': t.description,
@@ -90,27 +117,41 @@ class SupabaseRepository {
   // ---------------------------------------------------------------------------
   // SUBTASKS
   // ---------------------------------------------------------------------------
-  Stream<List<Subtask>> streamSubtasks() {
-    return _client.from('subtasks').stream(primaryKey: ['id']).map((dataList) {
-      return dataList.map((data) => Subtask(
-        id: data['id'],
-        taskId: data['task_id'],
-        title: data['title'] ?? '',
-        description: data['description'] ?? '',
-        status: _parseTaskStatus(data['status']),
-        startDate: DateTime.parse(data['start_date']),
-        endDate: DateTime.parse(data['end_date']),
-        assignedUserIds: (data['assigned_user_ids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-      )).toList();
-    });
+  Stream<List<Subtask>> streamSubtasks(String clinicId) {
+    return _client
+        .from('subtasks')
+        .stream(primaryKey: ['id'])
+        .eq('clinic_id', clinicId)
+        .map((dataList) {
+          return dataList
+              .map(
+                (data) => Subtask(
+                  id: data['id'],
+                  taskId: data['task_id'],
+                  title: data['title'] ?? '',
+                  description: data['description'] ?? '',
+                  status: _parseTaskStatus(data['status']),
+                  startDate: DateTime.parse(data['start_date']),
+                  endDate: DateTime.parse(data['end_date']),
+                  assignedUserIds:
+                      (data['assigned_user_ids'] as List<dynamic>?)
+                          ?.map((e) => e.toString())
+                          .toList() ??
+                      [],
+                ),
+              )
+              .toList();
+        });
   }
 
-  Future<void> saveSubtask(Subtask s) async {
-    List<String> assignIds = s.assignedUserIds.isNotEmpty 
-        ? s.assignedUserIds 
-        : [_client.auth.currentUser?.id ?? ''];
+  Future<void> saveSubtask(Subtask s, String clinicId) async {
+    List<String> assignIds =
+        s.assignedUserIds.isNotEmpty
+            ? s.assignedUserIds
+            : [_client.auth.currentUser?.id ?? ''];
     await _client.from('subtasks').upsert({
       'id': s.id,
+      'clinic_id': clinicId,
       'task_id': s.taskId,
       'title': s.title,
       'description': s.description,
@@ -128,29 +169,45 @@ class SupabaseRepository {
   // ---------------------------------------------------------------------------
   // SESSIONS
   // ---------------------------------------------------------------------------
-  Stream<List<Session>> streamSessions() {
-    return _client.from('sessions').stream(primaryKey: ['id']).map((dataList) {
-      return dataList.map((data) => Session(
-        id: data['id'],
-        clientId: data['client_id'] ?? '',
-        therapistIds: (data['therapist_ids'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-        date: DateTime.parse(data['date'] ?? DateTime.now().toIso8601String()),
-        durationMinutes: data['duration_minutes'] ?? 60,
-        type: _parseSessionType(data['type']),
-        status: _parseSessionStatus(data['status']),
-        generalMood: data['general_mood'] ?? '',
-        generalDiscussion: data['general_discussion'] ?? '',
-        therapistNotes: data['therapist_notes'] ?? '',
-      )).toList();
-    });
+  Stream<List<Session>> streamSessions(String clinicId) {
+    return _client
+        .from('sessions')
+        .stream(primaryKey: ['id'])
+        .eq('clinic_id', clinicId)
+        .map((dataList) {
+          return dataList
+              .map(
+                (data) => Session(
+                  id: data['id'],
+                  clientId: data['client_id'] ?? '',
+                  therapistIds:
+                      (data['therapist_ids'] as List<dynamic>?)
+                          ?.map((e) => e.toString())
+                          .toList() ??
+                      [],
+                  date: DateTime.parse(
+                    data['date'] ?? DateTime.now().toIso8601String(),
+                  ),
+                  durationMinutes: data['duration_minutes'] ?? 60,
+                  type: _parseSessionType(data['type']),
+                  status: _parseSessionStatus(data['status']),
+                  generalMood: data['general_mood'] ?? '',
+                  generalDiscussion: data['general_discussion'] ?? '',
+                  therapistNotes: data['therapist_notes'] ?? '',
+                ),
+              )
+              .toList();
+        });
   }
 
-  Future<void> saveSession(Session s) async {
-    List<String> assignIds = s.therapistIds.isNotEmpty 
-        ? s.therapistIds 
-        : [_client.auth.currentUser?.id ?? ''];
+  Future<void> saveSession(Session s, String clinicId) async {
+    List<String> assignIds =
+        s.therapistIds.isNotEmpty
+            ? s.therapistIds
+            : [_client.auth.currentUser?.id ?? ''];
     await _client.from('sessions').upsert({
       'id': s.id,
+      'clinic_id': clinicId,
       'client_id': s.clientId,
       'therapist_ids': assignIds,
       'date': s.date.toIso8601String(),
@@ -161,6 +218,10 @@ class SupabaseRepository {
       'general_discussion': s.generalDiscussion,
       'therapist_notes': s.therapistNotes,
     });
+  }
+
+  Future<void> deleteSession(String id) async {
+    await _client.from('sessions').delete().eq('id', id);
   }
 
   Future<void> deleteSession(String id) async {

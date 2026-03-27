@@ -18,74 +18,93 @@ class CurrentUserNotifier extends Notifier<AppUser> {
   AppUser build() {
     final authUser = Supabase.instance.client.auth.currentUser;
     if (authUser != null) {
-      Supabase.instance.client.from('users').stream(primaryKey: ['id']).eq('id', authUser.id).listen((data) {
-        if (data.isNotEmpty && Supabase.instance.client.auth.currentUser != null) {
-          final row = data.first;
-          state = _mapToAppUser(row);
-        }
-      });
+      Supabase.instance.client
+          .from('users')
+          .stream(primaryKey: ['id'])
+          .eq('id', authUser.id)
+          .listen((data) {
+            if (data.isNotEmpty &&
+                Supabase.instance.client.auth.currentUser != null) {
+              final row = data.first;
+              state = _mapToAppUser(row);
+            }
+          });
     }
-    // Return a default loading shell while streaming
     return AppUser(
       id: authUser?.id ?? '',
+      clinicId: '',
       name: 'Loading...',
       firstName: 'Loading',
       lastName: '',
       role: UserRole.therapist,
       userColor: Colors.purple,
-      email: '',
+      email: authUser?.email ?? '',
       phone: '',
       address: '',
       ahpraNumber: '',
       qualifications: '',
       notes: '',
+      setupComplete: true, // assume true until loaded to avoid flash
     );
   }
+
   void setUser(AppUser u) => state = u;
+
+  Future<void> completeSetup() async {
+    await Supabase.instance.client
+        .from('users')
+        .update({'setup_complete': true}).eq('id', state.id);
+  }
 }
 
-final systemUsersProvider =
-    NotifierProvider<SystemUsersNotifier, List<AppUser>>(
-      () => SystemUsersNotifier(),
-    );
+final systemUsersProvider = NotifierProvider<SystemUsersNotifier, List<AppUser>>(
+  () => SystemUsersNotifier(),
+);
 
 class SystemUsersNotifier extends Notifier<List<AppUser>> {
   @override
   List<AppUser> build() {
-    Supabase.instance.client.from('users').stream(primaryKey: ['id']).listen((dataList) {
-      if (Supabase.instance.client.auth.currentUser != null) {
-        state = dataList.map(_mapToAppUser).toList();
-      }
-    });
+    final user = ref.watch(currentUserProvider);
+    if (user.clinicId.isNotEmpty) {
+      Supabase.instance.client
+          .from('users')
+          .stream(primaryKey: ['id'])
+          .eq('clinic_id', user.clinicId)
+          .listen((dataList) {
+            if (Supabase.instance.client.auth.currentUser != null) {
+              state = dataList.map(_mapToAppUser).toList();
+            }
+          });
+    }
     return [];
   }
-  void addUser(AppUser u) {} // Managed by Supabase triggers/invites now
-  void updateUser(AppUser u) {}
-  void removeUser(String id) {}
 }
 
 AppUser _mapToAppUser(Map<String, dynamic> data) {
   String name = data['full_name'] ?? 'Unknown User';
   List<String> parts = name.split(' ');
-  String first = parts.first;
+  String first = parts.isNotEmpty ? parts.first : '';
   String last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
-  
+
   UserRole role = UserRole.therapist;
   if (data['role'] == 'Administrator') role = UserRole.admin;
   if (data['role'] == 'Admin') role = UserRole.receptionist;
 
   return AppUser(
     id: data['id'],
+    clinicId: data['clinic_id'] ?? '',
     name: name,
     firstName: first,
     lastName: last,
-    role: role, userColor: Colors.purple, // hardcoded for MVP defaults
+    role: role,
+    userColor: Colors.purple,
     email: '',
     phone: '',
     address: '',
     ahpraNumber: '',
     qualifications: '',
     notes: '',
+    setupComplete: data['setup_complete'] ?? false,
   );
 }
 
@@ -94,17 +113,60 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
 // =============================================
 final clinicSettingsProvider =
     NotifierProvider<ClinicSettingsNotifier, ClinicSettings>(
-      () => ClinicSettingsNotifier(),
-    );
+  () => ClinicSettingsNotifier(),
+);
 
 class ClinicSettingsNotifier extends Notifier<ClinicSettings> {
   @override
-  ClinicSettings build() => ClinicSettings(
-    clinicName: 'Tressia Art Therapy',
-    description:
-        'A warm, nurturing art therapy clinic supporting creative healing and self-expression.',
+  ClinicSettings build() {
+    final user = ref.watch(currentUserProvider);
+    if (user.clinicId.isNotEmpty) {
+      Supabase.instance.client
+          .from('clinics')
+          .stream(primaryKey: ['id'])
+          .eq('id', user.clinicId)
+          .listen((data) {
+            if (data.isNotEmpty &&
+                Supabase.instance.client.auth.currentUser != null) {
+              final row = data.first;
+              state = _mapToClinicSettings(row);
+            }
+          });
+    }
+    return ClinicSettings(
+      id: user.clinicId,
+      clinicName: 'Loading...',
+    );
+  }
+
+  void updateSettings(ClinicSettings s) async {
+    await Supabase.instance.client.from('clinics').update({
+      'name': s.clinicName,
+      'description': s.description,
+      'address': s.address,
+      'phone': s.phone,
+      'email': s.email,
+      'setup_complete': s.setupComplete,
+    }).eq('id', s.id);
+  }
+
+  Future<void> completeClinicSetup() async {
+    await Supabase.instance.client
+        .from('clinics')
+        .update({'setup_complete': true}).eq('id', state.id);
+  }
+}
+
+ClinicSettings _mapToClinicSettings(Map<String, dynamic> data) {
+  return ClinicSettings(
+    id: data['id'],
+    clinicName: data['name'] ?? '',
+    description: data['description'] ?? '',
+    address: data['address'] ?? '',
+    phone: data['phone'] ?? '',
+    email: data['email'] ?? '',
+    setupComplete: data['setup_complete'] ?? false,
   );
-  void updateSettings(ClinicSettings s) => state = s;
 }
 
 // =============================================
@@ -145,17 +207,19 @@ class ProjectsNotifier extends Notifier<List<Project>> {
 
   @override
   List<Project> build() {
-    // Listen to real-time changes
-    _repo.streamProjects().listen((data) {
-      if (Supabase.instance.client.auth.currentUser != null) {
-        state = data;
-      }
-    });
+    final user = ref.watch(currentUserProvider);
+    if (user.clinicId.isNotEmpty) {
+      _repo.streamProjects(user.clinicId).listen((data) {
+        if (Supabase.instance.client.auth.currentUser != null) {
+          state = data;
+        }
+      });
+    }
     return [];
   }
 
-  void addProject(Project p) => _repo.saveProject(p);
-  void updateProject(Project p) => _repo.saveProject(p);
+  void addProject(Project p) => _repo.saveProject(p, ref.read(currentUserProvider).clinicId);
+  void updateProject(Project p) => _repo.saveProject(p, ref.read(currentUserProvider).clinicId);
   void removeProject(String id) => _repo.deleteProject(id);
 }
 
@@ -171,16 +235,19 @@ class SessionsNotifier extends Notifier<List<Session>> {
 
   @override
   List<Session> build() {
-    _repo.streamSessions().listen((data) {
-      if (Supabase.instance.client.auth.currentUser != null) {
-        state = data;
-      }
-    });
+    final user = ref.watch(currentUserProvider);
+    if (user.clinicId.isNotEmpty) {
+      _repo.streamSessions(user.clinicId).listen((data) {
+        if (Supabase.instance.client.auth.currentUser != null) {
+          state = data;
+        }
+      });
+    }
     return [];
   }
 
-  void addSession(Session s) => _repo.saveSession(s);
-  void updateSession(Session s) => _repo.saveSession(s);
+  void addSession(Session s) => _repo.saveSession(s, ref.read(currentUserProvider).clinicId);
+  void updateSession(Session s) => _repo.saveSession(s, ref.read(currentUserProvider).clinicId);
   void removeSession(String id) => _repo.deleteSession(id);
 
   List<Session> forClient(String clientId) =>
@@ -200,16 +267,19 @@ class TasksNotifier extends Notifier<List<ProjectTask>> {
 
   @override
   List<ProjectTask> build() {
-    _repo.streamTasks().listen((data) {
-      if (Supabase.instance.client.auth.currentUser != null) {
-        state = data;
-      }
-    });
+    final user = ref.watch(currentUserProvider);
+    if (user.clinicId.isNotEmpty) {
+      _repo.streamTasks(user.clinicId).listen((data) {
+        if (Supabase.instance.client.auth.currentUser != null) {
+          state = data;
+        }
+      });
+    }
     return [];
   }
 
-  void addTask(ProjectTask t) => _repo.saveTask(t);
-  void updateTask(ProjectTask t) => _repo.saveTask(t);
+  void addTask(ProjectTask t) => _repo.saveTask(t, ref.read(currentUserProvider).clinicId);
+  void updateTask(ProjectTask t) => _repo.saveTask(t, ref.read(currentUserProvider).clinicId);
   void removeTask(String id) => _repo.deleteTask(id);
 }
 
@@ -225,16 +295,19 @@ class SubtasksNotifier extends Notifier<List<Subtask>> {
 
   @override
   List<Subtask> build() {
-    _repo.streamSubtasks().listen((data) {
-      if (Supabase.instance.client.auth.currentUser != null) {
-        state = data;
-      }
-    });
+    final user = ref.watch(currentUserProvider);
+    if (user.clinicId.isNotEmpty) {
+      _repo.streamSubtasks(user.clinicId).listen((data) {
+        if (Supabase.instance.client.auth.currentUser != null) {
+          state = data;
+        }
+      });
+    }
     return [];
   }
 
-  void addSubtask(Subtask s) => _repo.saveSubtask(s);
-  void updateSubtask(Subtask s) => _repo.saveSubtask(s);
+  void addSubtask(Subtask s) => _repo.saveSubtask(s, ref.read(currentUserProvider).clinicId);
+  void updateSubtask(Subtask s) => _repo.saveSubtask(s, ref.read(currentUserProvider).clinicId);
   void removeSubtask(String id) => _repo.deleteSubtask(id);
 }
 

@@ -1,46 +1,60 @@
--- Supabase Database Schema for Tressia
+-- Updated Supabase Database Schema for Tressia with Multi-tenancy
 -- ==========================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Drop old tables if they exist to prevent schema conflicts
+DROP TABLE IF EXISTS public.assignment_requests CASCADE;
 DROP TABLE IF EXISTS public.sessions CASCADE;
 DROP TABLE IF EXISTS public.subtasks CASCADE;
 DROP TABLE IF EXISTS public.tasks CASCADE;
 DROP TABLE IF EXISTS public.projects CASCADE;
-DROP TABLE IF EXISTS public.users CASCADE;
 DROP TABLE IF EXISTS public.invites CASCADE;
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP TABLE IF EXISTS public.clinics CASCADE;
+
+-- 0. CLINICS (Organizations)
+CREATE TABLE public.clinics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL DEFAULT 'New Clinic',
+    description TEXT,
+    address TEXT,
+    phone TEXT,
+    email TEXT,
+    setup_complete BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.clinics ENABLE ROW LEVEL SECURITY;
 
 -- 1. USERS PROFILE 
-CREATE TABLE IF NOT EXISTS public.users (
+CREATE TABLE public.users (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+    clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
     full_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'Therapist', -- 'Administrator', 'Therapist', 'Admin'
+    setup_complete BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view all users" ON public.users FOR SELECT USING (true);
-CREATE POLICY "Admins can update users" ON public.users FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('Administrator', 'Admin'))
-);
 
 -- 2. INVITES
-CREATE TABLE IF NOT EXISTS public.invites (
+CREATE TABLE public.invites (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email TEXT UNIQUE NOT NULL,
+    clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
     role TEXT NOT NULL,
     created_by UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(clinic_id, email)
 );
 ALTER TABLE public.invites ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Only admins can manage invites" ON public.invites FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('Administrator', 'Admin'))
-);
 
--- 3. PROJECTS (Corresponds to 'Project' model - Client + Phase)
-CREATE TABLE IF NOT EXISTS public.projects (
+-- 3. PROJECTS
+CREATE TABLE public.projects (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     client_id TEXT NOT NULL,
     first_name TEXT,
@@ -54,14 +68,11 @@ CREATE TABLE IF NOT EXISTS public.projects (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Access control for projects" ON public.projects FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('Administrator', 'Admin')) OR
-    auth.uid() = ANY(assigned_therapist_ids)
-);
 
--- 4. TASKS (Corresponds to 'ProjectTask' model)
-CREATE TABLE IF NOT EXISTS public.tasks (
+-- 4. TASKS
+CREATE TABLE public.tasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
     project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT,
@@ -73,14 +84,11 @@ CREATE TABLE IF NOT EXISTS public.tasks (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Access control for tasks" ON public.tasks FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('Administrator', 'Admin')) OR
-    auth.uid() = ANY(assigned_user_ids)
-);
 
 -- 5. SUBTASKS 
-CREATE TABLE IF NOT EXISTS public.subtasks (
+CREATE TABLE public.subtasks (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
     task_id UUID REFERENCES public.tasks(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT,
@@ -92,14 +100,11 @@ CREATE TABLE IF NOT EXISTS public.subtasks (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.subtasks ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Access control for subtasks" ON public.subtasks FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('Administrator', 'Admin')) OR
-    auth.uid() = ANY(assigned_user_ids)
-);
 
 -- 6. SESSIONS
-CREATE TABLE IF NOT EXISTS public.sessions (
+CREATE TABLE public.sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
     client_id TEXT NOT NULL,
     therapist_ids UUID[] DEFAULT '{}',
     date TIMESTAMPTZ NOT NULL,
@@ -113,53 +118,97 @@ CREATE TABLE IF NOT EXISTS public.sessions (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Access control for sessions" ON public.sessions FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('Administrator', 'Admin')) OR
-    auth.uid() = ANY(therapist_ids)
-);
 
--- TRIGGERS FOR MODIFIED COLUMN
+-- 7. ASSIGNMENT REQUESTS
+CREATE TABLE public.assignment_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
+    from_user_id UUID REFERENCES public.users(id),
+    to_user_id UUID REFERENCES public.users(id),
+    entity_type TEXT,
+    entity_id UUID,
+    entity_title TEXT,
+    message TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.assignment_requests ENABLE ROW LEVEL SECURITY;
+
+-- policies --
+
+-- Clinics: Users can see their own clinic
+CREATE POLICY "Users can view their clinic" ON public.clinics FOR SELECT 
+USING (EXISTS (SELECT 1 FROM public.users WHERE users.clinic_id = clinics.id AND users.id = auth.uid()));
+
+-- Users: Users can see users in their own clinic
+CREATE POLICY "Users can view clinic members" ON public.users FOR SELECT 
+USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+
+-- Projects, Tasks, Subtasks, Sessions, Invites: Filter by clinic_id
+CREATE POLICY "Clinic isolation for projects" ON public.projects FOR ALL 
+USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+
+CREATE POLICY "Clinic isolation for tasks" ON public.tasks FOR ALL 
+USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+
+CREATE POLICY "Clinic isolation for subtasks" ON public.subtasks FOR ALL 
+USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+
+CREATE POLICY "Clinic isolation for sessions" ON public.sessions FOR ALL 
+USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+
+CREATE POLICY "Clinic isolation for invites" ON public.invites FOR ALL 
+USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+
+CREATE POLICY "Clinic isolation for assignment_requests" ON public.assignment_requests FOR ALL 
+USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+
+
+-- TRIGGERS FOR MODIFIED COLUMN --
 CREATE OR REPLACE FUNCTION update_modified_column() RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
 $$ language 'plpgsql';
 
+CREATE TRIGGER update_clinics_modtime BEFORE UPDATE ON public.clinics FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+CREATE TRIGGER update_users_modtime BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_projects_modtime BEFORE UPDATE ON public.projects FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_tasks_modtime BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_subtasks_modtime BEFORE UPDATE ON public.subtasks FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_sessions_modtime BEFORE UPDATE ON public.sessions FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
--- TRIGGER FOR NEW USER SIGNUP (INVITE SYSTEM)
--- Note: You MUST pass 'full_name' in the metadata during Auth.signUp()
+-- TRIGGER FOR NEW USER SIGNUP --
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER AS $$
 DECLARE
-    invite_role TEXT;
-    user_count INT;
+    target_clinic_id UUID;
+    target_role TEXT;
 BEGIN
-    SELECT count(*) INTO user_count FROM public.users;
-    
-    IF user_count = 0 THEN
-        -- First user is automatically Administrator
-        INSERT INTO public.users (id, full_name, role)
-        VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'Admin User'), 'Administrator');
+    -- Check if user was invited
+    SELECT clinic_id, role INTO target_clinic_id, target_role 
+    FROM public.invites 
+    WHERE email = NEW.email 
+    LIMIT 1;
+
+    IF target_clinic_id IS NOT NULL THEN
+        -- Link to existing clinic
+        INSERT INTO public.users (id, clinic_id, full_name, role)
+        VALUES (NEW.id, target_clinic_id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'New Member'), target_role);
+        
+        -- Clean up invite
+        DELETE FROM public.invites WHERE email = NEW.email AND clinic_id = target_clinic_id;
     ELSE
-        -- Subsequent users must have an invite
-        SELECT role INTO invite_role FROM public.invites WHERE email = NEW.email;
-        IF invite_role IS NOT NULL THEN
-            INSERT INTO public.users (id, full_name, role)
-            VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'New User'), invite_role);
-            DELETE FROM public.invites WHERE email = NEW.email;
-        ELSE
-            -- Block signup if no invite
-            RAISE EXCEPTION 'You must be invited to join this clinic.';
-        END IF;
+        -- Create a NEW clinic for this new Administrator
+        INSERT INTO public.clinics (name) VALUES ('New Clinic')
+        RETURNING id INTO target_clinic_id;
+
+        INSERT INTO public.users (id, clinic_id, full_name, role)
+        VALUES (NEW.id, target_clinic_id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'New Admin'), 'Administrator');
     END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Drop trigger if exists to prevent errors on re-run
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
