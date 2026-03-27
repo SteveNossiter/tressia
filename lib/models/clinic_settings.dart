@@ -90,6 +90,8 @@ class AppUser {
     String? ahpraNumber,
     String? qualifications,
     String? notes,
+    String? passwordHash,
+    bool? twoFactorEnabled,
     bool? setupComplete,
   }) =>
       AppUser(
