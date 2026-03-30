@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clinic_settings.dart';
 import '../models/project_module.dart';
 import '../providers/app_state.dart';
@@ -189,6 +192,22 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   late TextEditingController _qualCtrl;
   late TextEditingController _notesCtrl;
 
+  late Color _selectedColor;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  final List<Color> _colorPalette = [
+    Colors.purple,
+    Colors.blue,
+    Colors.teal,
+    Colors.green,
+    Colors.orange,
+    Colors.red,
+    Colors.pink,
+    Colors.amber,
+    Colors.indigo,
+    Colors.cyan,
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -201,6 +220,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     _ahpraCtrl = TextEditingController(text: widget.user.ahpraNumber);
     _qualCtrl = TextEditingController(text: widget.user.qualifications);
     _notesCtrl = TextEditingController(text: widget.user.notes);
+    _selectedColor = widget.user.userColor;
   }
 
   @override
@@ -226,29 +246,65 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     return cur.isAdmin || cur.id == widget.user.id;
   }
 
-  void _save() {
-    final updated = widget.user.copyWith(
-      name: '${_firstCtrl.text} ${_lastCtrl.text}'.trim().isEmpty
-          ? _nameCtrl.text
-          : '${_firstCtrl.text} ${_lastCtrl.text}'.trim(),
-      firstName: _firstCtrl.text,
-      lastName: _lastCtrl.text,
-      email: _emailCtrl.text,
-      phone: _phoneCtrl.text,
-      address: _addressCtrl.text,
-      ahpraNumber: _ahpraCtrl.text,
-      qualifications: _qualCtrl.text,
-      notes: _notesCtrl.text,
+  Future<void> _pickProfilePhoto() async {
+    final XFile? image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
     );
-    ref.read(systemUsersProvider.notifier).updateUser(updated);
-    // If editing self, update currentUser too
-    if (widget.user.id == ref.read(currentUserProvider).id) {
-      ref.read(currentUserProvider.notifier).setUser(updated);
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      final base64String = base64Encode(bytes);
+      try {
+        await Supabase.instance.client.from('users').update({
+          'photo': base64String,
+        }).eq('id', widget.user.id);
+        ref.invalidate(currentUserProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile photo updated')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
     }
-    setState(() => _isEditing = false);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Profile updated')));
+  }
+
+  Future<void> _save() async {
+    final fullName = '${_firstCtrl.text} ${_lastCtrl.text}'.trim();
+    try {
+      await Supabase.instance.client.from('users').update({
+        'full_name': fullName.isNotEmpty ? fullName : _nameCtrl.text,
+        'email': _emailCtrl.text.trim(),
+        'phone': _phoneCtrl.text.trim(),
+        'address': _addressCtrl.text.trim(),
+        'ahpra_number': _ahpraCtrl.text.trim(),
+        'qualifications': _qualCtrl.text.trim(),
+        'notes': _notesCtrl.text.trim(),
+        'user_color': '#${_selectedColor.value.toRadixString(16).padLeft(8, '0')}',
+      }).eq('id', widget.user.id);
+
+      // Refresh provider data
+      ref.invalidate(currentUserProvider);
+
+      setState(() => _isEditing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -305,16 +361,41 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: user.userColor.withValues(alpha: 0.2),
-                    child: Text(
-                      user.initials,
-                      style: GoogleFonts.outfit(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: user.userColor,
-                      ),
+                  GestureDetector(
+                    onTap: (_isEditing && _canEdit) ? _pickProfilePhoto : null,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 36,
+                          backgroundColor: _selectedColor.withValues(alpha: 0.2),
+                          backgroundImage: (user.base64Photo != null && user.base64Photo!.isNotEmpty)
+                              ? MemoryImage(base64Decode(user.base64Photo!))
+                              : null,
+                          child: (user.base64Photo == null || user.base64Photo!.isEmpty)
+                              ? Text(
+                                  user.initials,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: _selectedColor,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        if (_isEditing && _canEdit)
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: theme.primaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 20),
@@ -398,6 +479,37 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               _field('Qualifications', _qualCtrl, theme),
               const SizedBox(height: 10),
               _field('Notes', _notesCtrl, theme, maxLines: 3),
+              const SizedBox(height: 20),
+              _sectionTitle('Profile Colour', theme),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _colorPalette.map((c) {
+                  final isSelected = _selectedColor.value == c.value;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedColor = c),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                        border: isSelected
+                            ? Border.all(color: theme.colorScheme.onSurface, width: 3)
+                            : null,
+                        boxShadow: isSelected
+                            ? [BoxShadow(color: c.withValues(alpha: 0.4), blurRadius: 8)]
+                            : null,
+                      ),
+                      child: isSelected
+                          ? const Icon(Icons.check, size: 18, color: Colors.white)
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
               const SizedBox(height: 20),
               Row(
                 children: [

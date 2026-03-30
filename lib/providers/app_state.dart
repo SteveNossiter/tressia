@@ -117,6 +117,15 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
   if (data['role'] == 'Administrator') role = UserRole.admin;
   if (data['role'] == 'Admin') role = UserRole.receptionist;
 
+  // Parse color from hex string, default to purple
+  Color userColor = Colors.purple;
+  if (data['user_color'] != null && data['user_color'].toString().isNotEmpty) {
+    try {
+      final hex = data['user_color'].toString().replaceFirst('#', '');
+      userColor = Color(int.parse(hex, radix: 16));
+    } catch (_) {}
+  }
+
   return AppUser(
     id: data['id'],
     clinicId: data['clinic_id'] ?? '',
@@ -124,13 +133,14 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
     firstName: first,
     lastName: last,
     role: role,
-    userColor: Colors.purple,
-    email: '',
-    phone: '',
-    address: '',
-    ahpraNumber: '',
-    qualifications: '',
-    notes: '',
+    userColor: userColor,
+    email: data['email'] ?? '',
+    phone: data['phone'] ?? '',
+    address: data['address'] ?? '',
+    base64Photo: data['photo'] ?? '',
+    ahpraNumber: data['ahpra_number'] ?? '',
+    qualifications: data['qualifications'] ?? '',
+    notes: data['notes'] ?? '',
     setupComplete: data['setup_complete'] ?? false,
   );
 }
@@ -212,6 +222,7 @@ ClinicSettings _mapToClinicSettings(Map<String, dynamic> data) {
     address: data['address'] ?? '',
     phone: data['phone'] ?? '',
     email: data['email'] ?? '',
+    base64Logo: data['logo'] ?? '',
     setupComplete: data['setup_complete'] ?? false,
   );
 }

@@ -4,13 +4,14 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/clinic_settings.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dashboard_screen.dart';
 import 'providers_screen.dart';
 import 'users_screen.dart';
 import 'clients_list_screen.dart';
 import '../widgets/block_calendar.dart';
 import '../widgets/raimble_record_button.dart';
-import 'clinic_setup_screen.dart';
+import 'clinic_details_screen.dart';
 import '../widgets/dialogs/glass_dialog.dart';
 import '../widgets/dialogs/client_creator.dart';
 
@@ -38,7 +39,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     const ClientsListScreen(),
     const ProvidersScreen(),
     if (isAdmin) const UsersScreen(),
-    const ClinicSetupScreen(),
+    const ClinicDetailsScreen(),
   ];
 
   @override
@@ -261,17 +262,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildUserMenu(ThemeData theme, AppUser user) {
     return PopupMenuButton<String>(
       offset: const Offset(0, 40),
-      onSelected: (val) {
+      onSelected: (val) async {
         if (val == 'profile') {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => UserProfileScreen(user: user)),
           );
         } else if (val == 'logout') {
-          // Placeholder for actual auth flow
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Logout — auth integration pending')),
-          );
+          await Supabase.instance.client.auth.signOut();
         }
       },
       itemBuilder: (ctx) => [

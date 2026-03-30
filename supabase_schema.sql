@@ -21,6 +21,7 @@ CREATE TABLE public.clinics (
     address TEXT,
     phone TEXT,
     email TEXT,
+    logo TEXT, -- base64 logo image
     setup_complete BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -33,6 +34,14 @@ CREATE TABLE public.users (
     clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
     full_name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'Therapist', -- 'Administrator', 'Therapist', 'Admin'
+    email TEXT,
+    phone TEXT,
+    address TEXT,
+    photo TEXT, -- base64 profile photo
+    user_color TEXT, -- hex color string e.g. '#ff9c27b0'
+    ahpra_number TEXT,
+    qualifications TEXT,
+    notes TEXT,
     setup_complete BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
