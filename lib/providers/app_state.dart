@@ -61,9 +61,12 @@ class CurrentUserNotifier extends Notifier<AppUser> {
           .maybeSingle();
       if (data != null) {
         state = _mapToAppUser(data);
+      } else {
+        // User record doesn't exist or RLS blocked it
+        print('TRESSIA DEBUG: _fetchUser returned null for userId=$userId');
       }
-    } catch (_) {
-      // Stream will catch up
+    } catch (e) {
+      print('TRESSIA DEBUG: _fetchUser error: $e');
     }
   }
 

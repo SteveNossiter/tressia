@@ -76,13 +76,60 @@ class SetupGate extends ConsumerStatefulWidget {
 
 class _SetupGateState extends ConsumerState<SetupGate> {
   bool _timedOut = false;
+  String _debugInfo = '';
 
   @override
   void initState() {
     super.initState();
     Future.delayed(const Duration(seconds: 6), () {
-      if (mounted) setState(() => _timedOut = true);
+      if (mounted) {
+        _runDiagnostics();
+        setState(() => _timedOut = true);
+      }
     });
+  }
+
+  Future<void> _runDiagnostics() async {
+    try {
+      final authUser = Supabase.instance.client.auth.currentUser;
+      if (authUser == null) {
+        _debugInfo = 'No auth user found';
+        return;
+      }
+
+      // Try a direct fetch to see what happens
+      final response = await Supabase.instance.client
+          .from('users')
+          .select()
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+      if (response == null) {
+        _debugInfo = 'Auth OK (${authUser.id}), but users table returned NULL.\n'
+            'This means RLS is blocking the read or no row exists.';
+      } else {
+        _debugInfo = 'Data found: clinic_id=${response['clinic_id']}, '
+            'role=${response['role']}';
+      }
+    } catch (e) {
+      _debugInfo = 'Fetch error: $e';
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _retry() async {
+    setState(() {
+      _timedOut = false;
+      _debugInfo = '';
+    });
+    // Force re-fetch
+    ref.invalidate(currentUserProvider);
+    ref.invalidate(clinicSettingsProvider);
+    await Future.delayed(const Duration(seconds: 6));
+    if (mounted) {
+      await _runDiagnostics();
+      setState(() => _timedOut = true);
+    }
   }
 
   @override
@@ -95,7 +142,7 @@ class _SetupGateState extends ConsumerState<SetupGate> {
       if (_timedOut) {
         return Scaffold(
           body: Center(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(32),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -107,22 +154,40 @@ class _SetupGateState extends ConsumerState<SetupGate> {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   Text(
-                    'Your user profile may not have been created correctly. '
-                    'Please try logging out and registering again, or contact support.\n\n'
-                    'Debug: clinicId="${user.clinicId}", userId="${user.id}"',
+                    _debugInfo.isNotEmpty ? _debugInfo : 'Running diagnostics...',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'userId="${user.id}"',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  ),
                   const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => Supabase.instance.client.auth.signOut(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('LOG OUT'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _retry,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('RETRY'),
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: () => Supabase.instance.client.auth.signOut(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('LOG OUT'),
+                      ),
+                    ],
                   ),
                 ],
               ),
