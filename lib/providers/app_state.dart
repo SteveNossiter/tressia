@@ -295,6 +295,9 @@ class ProjectsNotifier extends Notifier<List<Project>> {
     _sub?.cancel();
     
     if (user.clinicId.isNotEmpty) {
+      // Initial background fetch
+      _repo.fetchProjects(user.clinicId).then((data) => state = data);
+
       _sub = _repo.streamProjects(user.clinicId).listen((data) {
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
@@ -309,9 +312,48 @@ class ProjectsNotifier extends Notifier<List<Project>> {
     return [];
   }
 
-  void addProject(Project p) => _repo.saveProject(p, ref.read(currentUserProvider).clinicId);
-  void updateProject(Project p) => _repo.saveProject(p, ref.read(currentUserProvider).clinicId);
-  void removeProject(String id) => _repo.deleteProject(id);
+  Future<void> addProject(Project p) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    
+    // Optimistic update
+    state = [...state, p];
+    
+    try {
+      await _repo.saveProject(p, clinicId);
+    } catch (e) {
+      // Rollback on error
+      state = state.where((item) => item.id != p.id).toList();
+      rethrow;
+    }
+  }
+
+  Future<void> updateProject(Project p) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    
+    final oldState = state;
+    state = [for (final item in state) if (item.id == p.id) p else item];
+    
+    try {
+      await _repo.saveProject(p, clinicId);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
+
+  Future<void> removeProject(String id) async {
+    final oldState = state;
+    state = state.where((item) => item.id != id).toList();
+    
+    try {
+      await _repo.deleteProject(id);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
 }
 
 // =============================================
@@ -331,6 +373,9 @@ class SessionsNotifier extends Notifier<List<Session>> {
     _sub?.cancel();
 
     if (user.clinicId.isNotEmpty) {
+      // Initial fetch
+      _repo.fetchSessions(user.clinicId).then((data) => state = data);
+
       _sub = _repo.streamSessions(user.clinicId).listen((data) {
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
@@ -345,9 +390,41 @@ class SessionsNotifier extends Notifier<List<Session>> {
     return [];
   }
 
-  void addSession(Session s) => _repo.saveSession(s, ref.read(currentUserProvider).clinicId);
-  void updateSession(Session s) => _repo.saveSession(s, ref.read(currentUserProvider).clinicId);
-  void removeSession(String id) => _repo.deleteSession(id);
+  Future<void> addSession(Session s) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    state = [...state, s];
+    try {
+      await _repo.saveSession(s, clinicId);
+    } catch (e) {
+      state = state.where((item) => item.id != s.id).toList();
+      rethrow;
+    }
+  }
+
+  Future<void> updateSession(Session s) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    final oldState = state;
+    state = [for (final item in state) if (item.id == s.id) s else item];
+    try {
+      await _repo.saveSession(s, clinicId);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
+
+  Future<void> removeSession(String id) async {
+    final oldState = state;
+    state = state.where((item) => item.id != id).toList();
+    try {
+      await _repo.deleteSession(id);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
 
   List<Session> forClient(String clientId) =>
       state.where((s) => s.clientId == clientId).toList()
@@ -371,6 +448,9 @@ class TasksNotifier extends Notifier<List<ProjectTask>> {
     _sub?.cancel();
 
     if (user.clinicId.isNotEmpty) {
+      // Initial fetch
+      _repo.fetchTasks(user.clinicId).then((data) => state = data);
+
       _sub = _repo.streamTasks(user.clinicId).listen((data) {
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
@@ -385,9 +465,46 @@ class TasksNotifier extends Notifier<List<ProjectTask>> {
     return [];
   }
 
-  void addTask(ProjectTask t) => _repo.saveTask(t, ref.read(currentUserProvider).clinicId);
-  void updateTask(ProjectTask t) => _repo.saveTask(t, ref.read(currentUserProvider).clinicId);
-  void removeTask(String id) => _repo.deleteTask(id);
+  Future<void> addTask(ProjectTask t) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    
+    state = [...state, t];
+    
+    try {
+      await _repo.saveTask(t, clinicId);
+    } catch (e) {
+      state = state.where((item) => item.id != t.id).toList();
+      rethrow;
+    }
+  }
+
+  Future<void> updateTask(ProjectTask t) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    
+    final oldState = state;
+    state = [for (final item in state) if (item.id == t.id) t else item];
+    
+    try {
+      await _repo.saveTask(t, clinicId);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
+
+  Future<void> removeTask(String id) async {
+    final oldState = state;
+    state = state.where((item) => item.id != id).toList();
+    
+    try {
+      await _repo.deleteTask(id);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
 }
 
 // =============================================
@@ -407,6 +524,9 @@ class SubtasksNotifier extends Notifier<List<Subtask>> {
     _sub?.cancel();
 
     if (user.clinicId.isNotEmpty) {
+      // Initial fetch
+      _repo.fetchSubtasks(user.clinicId).then((data) => state = data);
+
       _sub = _repo.streamSubtasks(user.clinicId).listen((data) {
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
@@ -421,9 +541,46 @@ class SubtasksNotifier extends Notifier<List<Subtask>> {
     return [];
   }
 
-  void addSubtask(Subtask s) => _repo.saveSubtask(s, ref.read(currentUserProvider).clinicId);
-  void updateSubtask(Subtask s) => _repo.saveSubtask(s, ref.read(currentUserProvider).clinicId);
-  void removeSubtask(String id) => _repo.deleteSubtask(id);
+  Future<void> addSubtask(Subtask s) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    
+    state = [...state, s];
+    
+    try {
+      await _repo.saveSubtask(s, clinicId);
+    } catch (e) {
+      state = state.where((item) => item.id != s.id).toList();
+      rethrow;
+    }
+  }
+
+  Future<void> updateSubtask(Subtask s) async {
+    final clinicId = ref.read(currentUserProvider).clinicId;
+    if (clinicId.isEmpty) return;
+    
+    final oldState = state;
+    state = [for (final item in state) if (item.id == s.id) s else item];
+    
+    try {
+      await _repo.saveSubtask(s, clinicId);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
+
+  Future<void> removeSubtask(String id) async {
+    final oldState = state;
+    state = state.where((item) => item.id != id).toList();
+    
+    try {
+      await _repo.deleteSubtask(id);
+    } catch (e) {
+      state = oldState;
+      rethrow;
+    }
+  }
 }
 
 // =============================================

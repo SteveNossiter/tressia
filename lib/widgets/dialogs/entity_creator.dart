@@ -130,136 +130,155 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
       });
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (_titleCtrl.text.isEmpty) return;
     final isClientCourse = _entityType == 'Client Course';
     final isProject = _entityType == 'Project';
     final isSession = _entityType == 'Session';
+    final isTask = _entityType == 'Task';
+    final isSubtask = _entityType == 'Subtask';
 
-    if (isClientCourse || isProject) {
-      if (isClientCourse && _selectedClientId == null) return;
-
-      // Find the client template if it is a client course
-      final template = isClientCourse
-          ? ref
+    try {
+      if (isClientCourse || isProject) {
+        if (isClientCourse && _selectedClientId == null) return;
+        final template = isClientCourse
+            ? ref
                 .read(projectsProvider)
                 .firstWhere((p) => p.clientId == _selectedClientId)
-          : null;
+            : null;
 
-      final newProject = Project(
-        title: _titleCtrl.text,
-        clientId: template?.clientId ?? 'INTERNAL',
-        firstName: template?.firstName ?? '',
-        lastName: template?.lastName ?? '',
-        clientCode: template?.clientCode ?? 'INT-${DateTime.now().millisecond}',
-        clientType: isClientCourse
-            ? _selectedClientType
-            : 'Internal Project',
-        assignedTherapistIds: _assignedTherapistIds.isEmpty ? ['admin_1'] : _assignedTherapistIds,
-        notes: _descCtrl.text,
-        startDate: _startDate,
-        endDate: _endDate,
-        color: _color,
-      );
+        final newProject = Project(
+          title: _titleCtrl.text,
+          clientId: template?.clientId ?? 'INTERNAL',
+          firstName: template?.firstName ?? '',
+          lastName: template?.lastName ?? '',
+          clientCode:
+              template?.clientCode ?? 'INT-${DateTime.now().millisecond}',
+          clientType: isClientCourse ? _selectedClientType : 'Internal Project',
+          assignedTherapistIds: _assignedTherapistIds,
+          notes: _descCtrl.text,
+          startDate: _startDate,
+          endDate: _endDate,
+          color: _color,
+        );
 
-      ref.read(projectsProvider.notifier).addProject(newProject);
+        await ref.read(projectsProvider.notifier).addProject(newProject);
 
-      // If it's a Client Course, automatically add "Therapy Sessions" task
-      if (isClientCourse) {
-        ref
-            .read(tasksProvider.notifier)
-            .addTask(
+        if (isClientCourse) {
+          await ref.read(tasksProvider.notifier).addTask(
+                ProjectTask(
+                  projectId: newProject.id,
+                  title: 'Therapy Sessions',
+                  description:
+                      'Automatically managed task for therapy sessions.',
+                  startDate: _startDate,
+                  endDate: _endDate,
+                  color: Colors.blueAccent,
+                ),
+              );
+        }
+      } else if (isTask) {
+        if (_parentPhaseId == null) return;
+        await ref.read(tasksProvider.notifier).addTask(
               ProjectTask(
-                projectId: newProject.id,
-                title: 'Therapy Sessions',
-                description: 'Automatically managed task for therapy sessions.',
+                projectId: _parentPhaseId!,
+                title: _titleCtrl.text,
+                description: _descCtrl.text,
                 startDate: _startDate,
                 endDate: _endDate,
-                color: Colors.blueAccent,
+                color: _color,
+                assignedUserIds: _assignedTherapistIds.isEmpty
+                    ? ['unassigned']
+                    : _assignedTherapistIds,
               ),
             );
-      }
-    } else if (_entityType == 'Task') {
-      if (_parentPhaseId == null) return;
-      ref
-          .read(tasksProvider.notifier)
-          .addTask(
-            ProjectTask(
-              projectId: _parentPhaseId!,
-              title: _titleCtrl.text,
-              description: _descCtrl.text,
-              startDate: _startDate,
-              endDate: _endDate,
-              color: _color,
-              assignedUserIds: _assignedTherapistIds.isEmpty ? ['unassigned'] : _assignedTherapistIds,
-            ),
-          );
-    } else if (isSession) {
-      if (_parentPhaseId == null) return;
-      // Find the "Therapy Sessions" task of this project
-      final tasks = ref.read(tasksProvider);
-      final therapyTask = tasks.firstWhere(
-        (t) => t.projectId == _parentPhaseId && t.title == 'Therapy Sessions',
-        orElse: () {
-          // Create it if not exists (should exist for Client Course)
-          final t = ProjectTask(
+      } else if (isSession) {
+        if (_parentPhaseId == null) return;
+        final tasks = ref.read(tasksProvider);
+        ProjectTask therapyTask = tasks.firstWhere(
+          (t) => t.projectId == _parentPhaseId && t.title == 'Therapy Sessions',
+          orElse: () => ProjectTask(
             projectId: _parentPhaseId!,
             title: 'Therapy Sessions',
             startDate: DateTime.now(),
             endDate: DateTime.now().add(const Duration(days: 365)),
             color: Colors.blueAccent,
-          );
-          ref.read(tasksProvider.notifier).addTask(t);
-          return t;
-        },
-      );
+          ),
+        );
 
-      // Add as subtask
-      ref
-          .read(subtasksProvider.notifier)
-          .addSubtask(
-            Subtask(
-              taskId: therapyTask.id,
-              title: _titleCtrl.text,
-              description: _descCtrl.text,
-              startDate: _startDate,
-              endDate: _endDate,
-              color: _color,
-            ),
-          );
+        // Ensure task exists in DB
+        if (!tasks.any((t) => t.id == therapyTask.id)) {
+          await ref.read(tasksProvider.notifier).addTask(therapyTask);
+        }
 
-      // Also add to actual sessions list for clinical records
-      ref
-          .read(sessionsProvider.notifier)
-          .addSession(
-            Session(
-              clientId: _parentPhaseId!,
-              therapistIds: _assignedTherapistIds.isEmpty ? ['admin_1'] : _assignedTherapistIds,
-              date: _startDate,
-              startTime: _startTime,
-              therapistNotes: _descCtrl.text,
-            ),
-          );
-    } else if (_entityType == 'Subtask') {
-      if (_parentTaskId == null) return;
-      ref
-          .read(subtasksProvider.notifier)
-          .addSubtask(
-            Subtask(
-              taskId: _parentTaskId!,
-              title: _titleCtrl.text,
-              description: _descCtrl.text,
-              startDate: _startDate,
-              endDate: _endDate,
-              color: _color,
-              assignedUserIds: _assignedTherapistIds.isEmpty ? ['unassigned'] : _assignedTherapistIds,
-            ),
-          );
+        final combinedDate = DateTime(
+          _startDate.year,
+          _startDate.month,
+          _startDate.day,
+          _startTime?.hour ?? 9,
+          _startTime?.minute ?? 0,
+        );
+
+        // Add as subtask (Kanban/Gantt only shows tasks/subtasks)
+        await ref.read(subtasksProvider.notifier).addSubtask(
+              Subtask(
+                taskId: therapyTask.id,
+                title: _titleCtrl.text,
+                description: _descCtrl.text,
+                startDate: combinedDate,
+                endDate: combinedDate.add(const Duration(hours: 1)),
+                color: _color,
+              ),
+            );
+
+        // Add actual session
+        await ref.read(sessionsProvider.notifier).addSession(
+              Session(
+                clientId: _parentPhaseId!,
+                therapistIds: _assignedTherapistIds,
+                date: combinedDate,
+                therapistNotes: _descCtrl.text,
+                durationMinutes: 60,
+                type: SessionType.individual,
+                status: SessionStatus.scheduled,
+                generalDiscussion: '',
+                generalMood: '',
+              ),
+            );
+      } else if (isSubtask) {
+        if (_parentTaskId == null) return;
+        await ref.read(subtasksProvider.notifier).addSubtask(
+              Subtask(
+                taskId: _parentTaskId!,
+                title: _titleCtrl.text,
+                description: _descCtrl.text,
+                startDate: _startDate,
+                endDate: _endDate,
+                color: _color,
+                assignedUserIds: _assignedTherapistIds.isEmpty
+                    ? ['unassigned']
+                    : _assignedTherapistIds,
+              ),
+            );
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$_entityType added successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding $_entityType: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
     }
-    Navigator.pop(context);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$_entityType added')));
   }
 
   @override
