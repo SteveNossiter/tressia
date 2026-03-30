@@ -155,6 +155,7 @@ class Project {
     DateTime? startDate,
     DateTime? endDate,
     double? progress,
+    Color? color,
   }) => Project(
     id: id,
     title: title ?? this.title,
@@ -174,6 +175,7 @@ class Project {
     startDate: startDate ?? this.startDate,
     endDate: endDate ?? this.endDate,
     progress: progress ?? this.progress,
+    color: color ?? this.color,
   );
 }
 

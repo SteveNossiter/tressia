@@ -73,6 +73,7 @@ CREATE TABLE public.projects (
     notes TEXT,
     start_date TIMESTAMPTZ NOT NULL,
     end_date TIMESTAMPTZ NOT NULL,
+    color TEXT, -- hex color string
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -89,6 +90,7 @@ CREATE TABLE public.tasks (
     start_date TIMESTAMPTZ NOT NULL,
     end_date TIMESTAMPTZ NOT NULL,
     assigned_user_ids UUID[] DEFAULT '{}',
+    color TEXT, -- hex color string
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -105,6 +107,7 @@ CREATE TABLE public.subtasks (
     start_date TIMESTAMPTZ NOT NULL,
     end_date TIMESTAMPTZ NOT NULL,
     assigned_user_ids UUID[] DEFAULT '{}',
+    color TEXT, -- hex color string
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

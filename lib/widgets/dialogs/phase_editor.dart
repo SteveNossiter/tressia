@@ -197,7 +197,9 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
             children: [
               Expanded(
                 child: Text(
-                  'Client Course Details',
+                  p.clientType == 'Internal Project'
+                      ? 'Project Details'
+                      : 'Client Course Details',
                   style: GoogleFonts.outfit(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -275,20 +277,24 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
                     const SizedBox(height: 10),
                     _field('Address', _addressCtrl, theme),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: clientTypes.contains(_clientType)
-                          ? _clientType
-                          : null,
-                      decoration: _dec('Client Type', theme),
-                      items: clientTypes
-                          .map(
-                            (t) => DropdownMenuItem(value: t, child: Text(t)),
-                          )
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) setState(() => _clientType = v);
-                      },
-                    ),
+                    if (p.clientType != 'Internal Project') ...[
+                      DropdownButtonFormField<String>(
+                        value: clientTypes.contains(_clientType)
+                            ? _clientType
+                            : null,
+                        decoration: _dec('Client Type', theme),
+                        items: clientTypes
+                            .where((t) => t != 'Internal Project')
+                            .map(
+                              (t) => DropdownMenuItem(value: t, child: Text(t)),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) setState(() => _clientType = v);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     if (_clientType == 'NDIS') ...[
                       const SizedBox(height: 10),
                       _field('NDIS Number', _ndisCtrl, theme),

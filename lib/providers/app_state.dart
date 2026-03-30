@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/project_module.dart';
@@ -14,26 +15,32 @@ final currentUserProvider = NotifierProvider<CurrentUserNotifier, AppUser>(
 );
 
 class CurrentUserNotifier extends Notifier<AppUser> {
+  StreamSubscription? _sub;
+
   @override
   AppUser build() {
     final authUser = Supabase.instance.client.auth.currentUser;
+    _sub?.cancel();
+
     if (authUser != null) {
-      // Immediate fetch to avoid waiting for the stream
       _fetchUser(authUser.id);
 
-      // Also listen for real-time updates
-      Supabase.instance.client
+      _sub = Supabase.instance.client
           .from('users')
           .stream(primaryKey: ['id'])
           .eq('id', authUser.id)
           .listen((data) {
             if (data.isNotEmpty &&
-                Supabase.instance.client.auth.currentUser != null) {
+                Supabase.instance.client.auth.currentUser?.id == authUser.id) {
               final row = data.first;
               state = _mapToAppUser(row);
             }
           });
     }
+
+    ref.onDispose(() {
+      _sub?.cancel();
+    });
     return AppUser(
       id: authUser?.id ?? '',
       clinicId: '',
@@ -85,20 +92,29 @@ final systemUsersProvider = NotifierProvider<SystemUsersNotifier, List<AppUser>>
 );
 
 class SystemUsersNotifier extends Notifier<List<AppUser>> {
+  StreamSubscription? _sub;
+
   @override
   List<AppUser> build() {
     final user = ref.watch(currentUserProvider);
+    _sub?.cancel();
+
     if (user.clinicId.isNotEmpty) {
-      Supabase.instance.client
+      _sub = Supabase.instance.client
           .from('users')
           .stream(primaryKey: ['id'])
           .eq('clinic_id', user.clinicId)
           .listen((dataList) {
-            if (Supabase.instance.client.auth.currentUser != null) {
+            if (ref.read(currentUserProvider).clinicId == user.clinicId) {
               state = dataList.map(_mapToAppUser).toList();
             }
           });
     }
+
+    ref.onDispose(() {
+      _sub?.cancel();
+    });
+
     return [];
   }
 
@@ -154,29 +170,36 @@ final clinicSettingsProvider =
 );
 
 class ClinicSettingsNotifier extends Notifier<ClinicSettings> {
+  StreamSubscription? _sub;
+
   @override
   ClinicSettings build() {
     final user = ref.watch(currentUserProvider);
+    _sub?.cancel();
+
     if (user.clinicId.isNotEmpty) {
-      // Immediate fetch
       _fetchClinic(user.clinicId);
 
-      // Also listen for real-time updates
-      Supabase.instance.client
+      _sub = Supabase.instance.client
           .from('clinics')
           .stream(primaryKey: ['id'])
           .eq('id', user.clinicId)
           .listen((data) {
             if (data.isNotEmpty &&
-                Supabase.instance.client.auth.currentUser != null) {
+                ref.read(currentUserProvider).clinicId == user.clinicId) {
               final row = data.first;
               state = _mapToClinicSettings(row);
             }
           });
     }
+
+    ref.onDispose(() {
+      _sub?.cancel();
+    });
     return ClinicSettings(
       id: user.clinicId,
       clinicName: 'Loading...',
+      setupComplete: true, // Assume true until loaded to avoid flash
     );
   }
 
@@ -236,7 +259,7 @@ final clientTypesProvider = NotifierProvider<ClientTypesNotifier, List<String>>(
 
 class ClientTypesNotifier extends Notifier<List<String>> {
   @override
-  List<String> build() => ['Private', 'NDIS', 'Medicare', 'WorkCover'];
+  List<String> build() => ['Private', 'NDIS', 'Medicare', 'WorkCover', 'Internal Project'];
   void addType(String t) => state = [...state, t];
 }
 
@@ -262,17 +285,27 @@ final projectsProvider = NotifierProvider<ProjectsNotifier, List<Project>>(
 
 class ProjectsNotifier extends Notifier<List<Project>> {
   final _repo = SupabaseRepository();
+  StreamSubscription? _sub;
 
   @override
   List<Project> build() {
     final user = ref.watch(currentUserProvider);
+    
+    // Always clean up existing subscription on rebuild
+    _sub?.cancel();
+    
     if (user.clinicId.isNotEmpty) {
-      _repo.streamProjects(user.clinicId).listen((data) {
-        if (Supabase.instance.client.auth.currentUser != null) {
+      _sub = _repo.streamProjects(user.clinicId).listen((data) {
+        if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
         }
       });
     }
+
+    ref.onDispose(() {
+      _sub?.cancel();
+    });
+
     return [];
   }
 
@@ -290,17 +323,25 @@ final sessionsProvider = NotifierProvider<SessionsNotifier, List<Session>>(
 
 class SessionsNotifier extends Notifier<List<Session>> {
   final _repo = SupabaseRepository();
+  StreamSubscription? _sub;
 
   @override
   List<Session> build() {
     final user = ref.watch(currentUserProvider);
+    _sub?.cancel();
+
     if (user.clinicId.isNotEmpty) {
-      _repo.streamSessions(user.clinicId).listen((data) {
-        if (Supabase.instance.client.auth.currentUser != null) {
+      _sub = _repo.streamSessions(user.clinicId).listen((data) {
+        if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
         }
       });
     }
+
+    ref.onDispose(() {
+      _sub?.cancel();
+    });
+
     return [];
   }
 
@@ -322,17 +363,25 @@ final tasksProvider = NotifierProvider<TasksNotifier, List<ProjectTask>>(
 
 class TasksNotifier extends Notifier<List<ProjectTask>> {
   final _repo = SupabaseRepository();
+  StreamSubscription? _sub;
 
   @override
   List<ProjectTask> build() {
     final user = ref.watch(currentUserProvider);
+    _sub?.cancel();
+
     if (user.clinicId.isNotEmpty) {
-      _repo.streamTasks(user.clinicId).listen((data) {
-        if (Supabase.instance.client.auth.currentUser != null) {
+      _sub = _repo.streamTasks(user.clinicId).listen((data) {
+        if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
         }
       });
     }
+
+    ref.onDispose(() {
+      _sub?.cancel();
+    });
+
     return [];
   }
 
@@ -350,17 +399,25 @@ final subtasksProvider = NotifierProvider<SubtasksNotifier, List<Subtask>>(
 
 class SubtasksNotifier extends Notifier<List<Subtask>> {
   final _repo = SupabaseRepository();
+  StreamSubscription? _sub;
 
   @override
   List<Subtask> build() {
     final user = ref.watch(currentUserProvider);
+    _sub?.cancel();
+
     if (user.clinicId.isNotEmpty) {
-      _repo.streamSubtasks(user.clinicId).listen((data) {
-        if (Supabase.instance.client.auth.currentUser != null) {
+      _sub = _repo.streamSubtasks(user.clinicId).listen((data) {
+        if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
         }
       });
     }
+
+    ref.onDispose(() {
+      _sub?.cancel();
+    });
+
     return [];
   }
 

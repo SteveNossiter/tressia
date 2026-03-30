@@ -29,6 +29,7 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
   List<String> _assignedTherapistIds = [];
   String? _parentPhaseId;
   String? _parentTaskId;
+  String _selectedClientType = 'Private';
 
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -152,10 +153,8 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
         lastName: template?.lastName ?? '',
         clientCode: template?.clientCode ?? 'INT-${DateTime.now().millisecond}',
         clientType: isClientCourse
-            ? 'Client Course'
-            : (_descCtrl.text.contains('Clinic')
-                  ? 'Clinic Setup'
-                  : 'Internal Project'),
+            ? _selectedClientType
+            : 'Internal Project',
         assignedTherapistIds: _assignedTherapistIds.isEmpty ? ['admin_1'] : _assignedTherapistIds,
         notes: _descCtrl.text,
         startDate: _startDate,
@@ -334,18 +333,17 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                   // Select Client (only for Client Course)
                   if (_entityType == 'Client Course') ...[
                     DropdownButtonFormField<String>(
-                      decoration: _dec('Select Existing Client *', theme),
-                      value: _selectedClientId,
-                      items: projects
-                          .where((p) => p.clientType == 'Client Course')
+                      decoration: _dec('Client Type *', theme),
+                      value: _selectedClientType,
+                      items: ref.watch(clientTypesProvider)
                           .map(
-                            (p) => DropdownMenuItem(
-                              value: p.clientId,
-                              child: Text(p.clientName),
+                            (t) => DropdownMenuItem(
+                              value: t,
+                              child: Text(t),
                             ),
                           )
                           .toList(),
-                      onChanged: (v) => setState(() => _selectedClientId = v),
+                      onChanged: (v) => setState(() => _selectedClientType = v!),
                     ),
                     const SizedBox(height: 12),
                   ],

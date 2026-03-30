@@ -100,6 +100,7 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
       // Save Personal Details
       await Supabase.instance.client.from('users').update({
         'full_name': '${_userFirstNameCtrl.text} ${_userLastNameCtrl.text}'.trim(),
+        'ahpra_number': _userAhpraCtrl.text.trim(),
         'setup_complete': true,
       }).eq('id', currentUser.id);
 

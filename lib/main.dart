@@ -197,7 +197,7 @@ class _SetupGateState extends ConsumerState<SetupGate> {
       }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-
+    // Data is loaded, check if setup is complete
     if (!user.setupComplete || !clinic.setupComplete) {
       return ClinicSetupScreen();
     }

@@ -322,6 +322,19 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     final pastClients =
         <Project>[]; // Placeholder for when clients are archived
 
+    // Keep controllers in sync only when not editing
+    if (!_isEditing) {
+      _firstCtrl.text = user.firstName;
+      _lastCtrl.text = user.lastName;
+      _emailCtrl.text = user.email;
+      _phoneCtrl.text = user.phone;
+      _addressCtrl.text = user.address;
+      _ahpraCtrl.text = user.ahpraNumber;
+      _qualCtrl.text = user.qualifications;
+      _notesCtrl.text = user.notes;
+      _selectedColor = user.userColor;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(

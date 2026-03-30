@@ -203,7 +203,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       final matchesType =
           _filterType == 'All' ||
-          (_filterType == 'Client Course' && p.clientType == 'Client Course') ||
+          (_filterType == 'Client Course' && p.clientType != 'Internal Project') ||
           (_filterType == 'Project' && p.clientType == 'Internal Project');
 
       final matchesTherapist =
@@ -973,7 +973,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     _buildDayRow(
                       context,
                       p.title,
-                      AppTheme.phaseColors[projects.indexOf(p) % AppTheme.phaseColors.length],
+                      p.color,
                       labelWidth,
                       maxTotalWidth,
                       () => _openPhaseEditor(p),
@@ -1254,7 +1254,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (filteredProj.isEmpty) return [];
 
     final theme = Theme.of(context);
-    final allProjects = ref.watch(projectsProvider);
 
     Map<String, List<ProjectTask>> groupedByProject = {};
     for (var t in filteredT) {
@@ -1266,9 +1265,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ..sort((a, b) => a.startDate.compareTo(b.startDate));
 
     for (var p in sortedProjects) {
-      if (!groupedByProject.containsKey(p.id)) continue;
-
-      List<ProjectTask> pTasks = groupedByProject[p.id]!;
+      List<ProjectTask> pTasks = groupedByProject[p.id] ?? [];
       bool isCollapsed = _collapsedKanbanPhases.contains(p.id);
 
       grouped.add(
@@ -1276,12 +1273,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           duration: const Duration(milliseconds: 300),
           margin: const EdgeInsets.only(bottom: 24),
           decoration: BoxDecoration(
-            color:
-                theme.cardTheme.color?.withValues(alpha: 0.5) ??
-                theme.scaffoldBackgroundColor,
+            color: p.color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: theme.dividerColor.withValues(alpha: 0.1),
+              color: p.color.withValues(alpha: 0.3),
             ),
           ),
           child: Column(
@@ -1302,24 +1297,43 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         width: 4,
                         height: 24,
                         decoration: BoxDecoration(
-                          color:
-                              AppTheme.phaseColors[allProjects.indexOf(p) %
-                                  AppTheme.phaseColors.length],
+                          color: p.color,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: Text(
-                          p.title.toUpperCase(),
-                          style: GoogleFonts.outfit(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
-                            color: theme.hintColor,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.title.toUpperCase(),
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            Text(
+                              p.clientType,
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      // Edit button for the project
+                      IconButton(
+                        icon: Icon(Icons.edit_outlined, size: 18, color: p.color),
+                        onPressed: () => _openPhaseEditor(p),
+                        tooltip: 'Edit ${p.clientType}',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                      const SizedBox(width: 8),
                       Icon(
                         isCollapsed ? Icons.expand_more : Icons.expand_less,
                         size: 22,
@@ -1332,142 +1346,156 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               if (!isCollapsed)
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: pTasks.map((t) {
-                      var tSubs = filteredS
-                          .where((s) => s.taskId == t.id)
-                          .toList();
-                      tSubs.sort((a, b) => a.endDate.compareTo(b.endDate));
-                      bool allDone =
-                          tSubs.isNotEmpty &&
-                          tSubs.every((s) => s.status == TaskStatus.done);
-                      bool isTaskCollapsed = _collapsedKanbanTasks.contains(
-                        t.id,
-                      );
-                      int taskUrgency = _getUrgency(t.endDate, t.status);
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: taskUrgency == 2
-                                ? Colors.red
-                                : (taskUrgency == 1
-                                      ? Colors.amber
-                                      : (allDone
-                                            ? theme.dividerColor.withValues(
-                                                alpha: 0.2,
-                                              )
-                                            : Colors.transparent)),
-                            width: taskUrgency > 0 ? 4.0 : 1.0,
-                          ),
-                          color: allDone
-                              ? theme.scaffoldBackgroundColor
-                              : t.color.withValues(alpha: 0.25),
-                          boxShadow: [],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Container(
-                                width: 6,
-                                color: allDone ? theme.dividerColor : t.color,
+                  child: pTasks.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: Text(
+                              'No tasks yet. Use "Add New" to create one.',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                color: theme.hintColor,
+                                fontStyle: FontStyle.italic,
                               ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
+                            ),
+                          ),
+                        )
+                      : Column(
+                          children: pTasks.map((t) {
+                            var tSubs = filteredS
+                                .where((s) => s.taskId == t.id)
+                                .toList();
+                            tSubs.sort((a, b) => a.endDate.compareTo(b.endDate));
+                            bool allDone =
+                                tSubs.isNotEmpty &&
+                                tSubs.every((s) => s.status == TaskStatus.done);
+                            bool isTaskCollapsed = _collapsedKanbanTasks.contains(
+                              t.id,
+                            );
+                            int taskUrgency = _getUrgency(t.endDate, t.status);
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: taskUrgency == 2
+                                      ? Colors.red
+                                      : (taskUrgency == 1
+                                            ? Colors.amber
+                                            : (allDone
+                                                  ? theme.dividerColor.withValues(
+                                                      alpha: 0.2,
+                                                    )
+                                                  : Colors.transparent)),
+                                  width: taskUrgency > 0 ? 4.0 : 1.0,
+                                ),
+                                color: allDone
+                                    ? theme.scaffoldBackgroundColor
+                                    : t.color.withValues(alpha: 0.25),
+                                boxShadow: [],
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    GestureDetector(
-                                      onTap: () => _openTaskEditor(t),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(16),
-                                        color: Colors.transparent,
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              allDone
-                                                  ? Icons.check_circle
-                                                  : Icons
-                                                        .radio_button_unchecked,
-                                              color: allDone
-                                                  ? theme.dividerColor
-                                                  : t.color,
-                                              size: 20,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Text(
-                                                t.title,
-                                                style: GoogleFonts.outfit(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w700,
-                                                  decoration: allDone
-                                                      ? TextDecoration
-                                                            .lineThrough
-                                                      : null,
-                                                  color: allDone
-                                                      ? theme.hintColor
-                                                      : theme
-                                                            .colorScheme
-                                                            .onSurface,
-                                                ),
+                                    Container(
+                                      width: 6,
+                                      color: allDone ? theme.dividerColor : t.color,
+                                    ),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () => _openTaskEditor(t),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(16),
+                                              color: Colors.transparent,
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    allDone
+                                                        ? Icons.check_circle
+                                                        : Icons
+                                                              .radio_button_unchecked,
+                                                    color: allDone
+                                                        ? theme.dividerColor
+                                                        : t.color,
+                                                    size: 20,
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      t.title,
+                                                      style: GoogleFonts.outfit(
+                                                        fontSize: 15,
+                                                        fontWeight: FontWeight.w700,
+                                                        decoration: allDone
+                                                            ? TextDecoration
+                                                                  .lineThrough
+                                                            : null,
+                                                        color: allDone
+                                                            ? theme.hintColor
+                                                            : theme
+                                                                  .colorScheme
+                                                                  .onSurface,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (tSubs.isNotEmpty)
+                                                    GestureDetector(
+                                                      onTap: () => setState(() {
+                                                        if (isTaskCollapsed)
+                                                          _collapsedKanbanTasks
+                                                              .remove(t.id);
+                                                        else
+                                                          _collapsedKanbanTasks.add(
+                                                            t.id,
+                                                          );
+                                                      }),
+                                                      child: Icon(
+                                                        isTaskCollapsed
+                                                            ? Icons.expand_more
+                                                            : Icons.expand_less,
+                                                        color: theme.hintColor,
+                                                      ),
+                                                    ),
+                                                ],
                                               ),
                                             ),
-                                            if (tSubs.isNotEmpty)
-                                              GestureDetector(
-                                                onTap: () => setState(() {
-                                                  if (isTaskCollapsed)
-                                                    _collapsedKanbanTasks
-                                                        .remove(t.id);
-                                                  else
-                                                    _collapsedKanbanTasks.add(
-                                                      t.id,
-                                                    );
-                                                }),
-                                                child: Icon(
-                                                  isTaskCollapsed
-                                                      ? Icons.expand_more
-                                                      : Icons.expand_less,
-                                                  color: theme.hintColor,
-                                                ),
+                                          ),
+                                          if (!isTaskCollapsed && tSubs.isNotEmpty)
+                                            Container(
+                                              padding: const EdgeInsets.fromLTRB(
+                                                16,
+                                                0,
+                                                16,
+                                                16,
                                               ),
-                                          ],
-                                        ),
+                                              child: Column(
+                                                children: tSubs
+                                                    .map(
+                                                      (s) => _buildKanbanSubtaskCard(
+                                                        context,
+                                                        s,
+                                                        t.color,
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
-                                    if (!isTaskCollapsed && tSubs.isNotEmpty)
-                                      Container(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          16,
-                                          0,
-                                          16,
-                                          16,
-                                        ),
-                                        child: Column(
-                                          children: tSubs
-                                              .map(
-                                                (s) => _buildKanbanSubtaskCard(
-                                                  context,
-                                                  s,
-                                                  t.color,
-                                                ),
-                                              )
-                                              .toList(),
-                                        ),
-                                      ),
                                   ],
                                 ),
                               ),
-                            ],
-                          ),
+                            );
+                          }).toList(),
                         ),
-                      );
-                    }).toList(),
-                  ),
                 ),
             ],
           ),
@@ -1491,6 +1519,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return grouped;
   }
+
 
   Widget _buildKanbanSubtaskCard(
     BuildContext context,
@@ -1582,11 +1611,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       if (s.assignedUserIds.isNotEmpty)
                         CircleAvatar(
                           radius: 10,
-                          backgroundColor: Colors.purple.withValues(alpha: 0.5),
+                          backgroundColor: chosenColor.withValues(alpha: 0.5),
                           child: const Icon(
                             Icons.person,
                             size: 12,
                             color: Colors.white,
+                          ),
+                        )
+                      else
+                        Tooltip(
+                          message: 'No user assigned — please assign a team member',
+                          child: Icon(
+                            Icons.warning_amber_rounded,
+                            size: 20,
+                            color: Colors.orange,
                           ),
                         ),
                     ],

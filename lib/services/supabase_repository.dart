@@ -31,6 +31,7 @@ class SupabaseRepository {
                   notes: data['notes'] ?? '',
                   startDate: DateTime.parse(data['start_date']),
                   endDate: DateTime.parse(data['end_date']),
+                  color: _parseColor(data['color']),
                 ),
               )
               .toList();
@@ -55,6 +56,7 @@ class SupabaseRepository {
       'notes': p.notes,
       'start_date': p.startDate.toIso8601String(),
       'end_date': p.endDate.toIso8601String(),
+      'color': '#${p.color.value.toRadixString(16).padLeft(8, '0')}',
     });
   }
 
@@ -81,6 +83,7 @@ class SupabaseRepository {
                   status: _parseTaskStatus(data['status']),
                   startDate: DateTime.parse(data['start_date']),
                   endDate: DateTime.parse(data['end_date']),
+                  color: _parseColor(data['color']),
                   assignedUserIds:
                       (data['assigned_user_ids'] as List<dynamic>?)
                           ?.map((e) => e.toString())
@@ -107,6 +110,7 @@ class SupabaseRepository {
       'start_date': t.startDate.toIso8601String(),
       'end_date': t.endDate.toIso8601String(),
       'assigned_user_ids': assignIds,
+      'color': '#${t.color.value.toRadixString(16).padLeft(8, '0')}',
     });
   }
 
@@ -133,6 +137,7 @@ class SupabaseRepository {
                   status: _parseTaskStatus(data['status']),
                   startDate: DateTime.parse(data['start_date']),
                   endDate: DateTime.parse(data['end_date']),
+                  color: _parseColorNullable(data['color']),
                   assignedUserIds:
                       (data['assigned_user_ids'] as List<dynamic>?)
                           ?.map((e) => e.toString())
@@ -159,6 +164,7 @@ class SupabaseRepository {
       'start_date': s.startDate.toIso8601String(),
       'end_date': s.endDate.toIso8601String(),
       'assigned_user_ids': assignIds,
+      'color': s.color != null ? '#${s.color!.value.toRadixString(16).padLeft(8, '0')}' : null,
     });
   }
 
@@ -245,5 +251,23 @@ class SupabaseRepository {
     if (name == SessionStatus.cancelled.name) return SessionStatus.cancelled;
     if (name == SessionStatus.noShow.name) return SessionStatus.noShow;
     return SessionStatus.scheduled;
+  }
+
+  Color _parseColor(String? hex) {
+    if (hex == null || hex.isEmpty) return const Color(0xFF38BDF8);
+    try {
+      return Color(int.parse(hex.replaceFirst('#', ''), radix: 16));
+    } catch (_) {
+      return const Color(0xFF38BDF8);
+    }
+  }
+
+  Color? _parseColorNullable(String? hex) {
+    if (hex == null || hex.isEmpty) return null;
+    try {
+      return Color(int.parse(hex.replaceFirst('#', ''), radix: 16));
+    } catch (_) {
+      return null;
+    }
   }
 }
