@@ -93,33 +93,50 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
   }
 
   void _completeSetup() async {
-    final currentUser = ref.read(currentUserProvider);
-    final currentClinic = ref.read(clinicSettingsProvider);
+    try {
+      final currentUser = ref.read(currentUserProvider);
+      final currentClinic = ref.read(clinicSettingsProvider);
 
-    // Save Personal Details
-    await Supabase.instance.client.from('users').update({
-      'full_name': '${_userFirstNameCtrl.text} ${_userLastNameCtrl.text}'.trim(),
-      'setup_complete': true,
-    }).eq('id', currentUser.id);
+      // Save Personal Details
+      await Supabase.instance.client.from('users').update({
+        'full_name': '${_userFirstNameCtrl.text} ${_userLastNameCtrl.text}'.trim(),
+        'setup_complete': true,
+      }).eq('id', currentUser.id);
 
-    // Save Clinic Details (if admin)
-    if (currentUser.isAdmin) {
-      await ref.read(clinicSettingsProvider.notifier).updateSettings(
-            currentClinic.copyWith(
-              clinicName: _nameCtrl.text,
-              description: _descCtrl.text,
-              address: _addressCtrl.text,
-              phone: _phoneCtrl.text,
-              email: _emailCtrl.text,
-              setupComplete: true,
-            ),
-          );
+      // Save Clinic Details (if admin)
+      if (currentUser.isAdmin) {
+        await Supabase.instance.client.from('clinics').update({
+          'name': _nameCtrl.text,
+          'description': _descCtrl.text,
+          'address': _addressCtrl.text,
+          'phone': _phoneCtrl.text,
+          'email': _emailCtrl.text,
+          'setup_complete': true,
+        }).eq('id', currentClinic.id);
+      }
+
+      // Force providers to re-fetch the updated data
+      ref.invalidate(currentUserProvider);
+      ref.invalidate(clinicSettingsProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Setup Complete! Loading dashboard...')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error completing setup: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Initial Setup Complete!')),
-    );
   }
+
 
   @override
   Widget build(BuildContext context) {
