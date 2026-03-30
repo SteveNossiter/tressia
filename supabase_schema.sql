@@ -143,23 +143,27 @@ CREATE TABLE public.assignment_requests (
 );
 ALTER TABLE public.assignment_requests ENABLE ROW LEVEL SECURITY;
 
--- policies --
+-- Helper function to bypass RLS on self-referencing policies
+CREATE OR REPLACE FUNCTION public.get_my_clinic_id()
+RETURNS UUID AS $$
+  SELECT clinic_id FROM public.users WHERE id = auth.uid()
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Clinics: Users can see their own clinic
 CREATE POLICY "Users can view their clinic" ON public.clinics FOR SELECT 
-USING (EXISTS (SELECT 1 FROM public.users WHERE users.clinic_id = clinics.id AND users.id = auth.uid()));
+USING (id = public.get_my_clinic_id());
 
 -- Clinics: Admins can update their own clinic
 CREATE POLICY "Admins can update their clinic" ON public.clinics FOR UPDATE 
-USING (EXISTS (SELECT 1 FROM public.users WHERE users.clinic_id = clinics.id AND users.id = auth.uid() AND users.role = 'Administrator'));
+USING (id = public.get_my_clinic_id());
 
--- Users: Can read own record (avoids self-referential RLS issue)
+-- Users: Can read own record
 CREATE POLICY "Users can read own record" ON public.users FOR SELECT 
 USING (id = auth.uid());
 
 -- Users: Can see users in their own clinic
 CREATE POLICY "Users can view clinic members" ON public.users FOR SELECT 
-USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+USING (clinic_id = public.get_my_clinic_id());
 
 -- Users: Can update their own record
 CREATE POLICY "Users can update own record" ON public.users FOR UPDATE 
@@ -167,22 +171,23 @@ USING (id = auth.uid());
 
 -- Projects, Tasks, Subtasks, Sessions, Invites: Filter by clinic_id
 CREATE POLICY "Clinic isolation for projects" ON public.projects FOR ALL 
-USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+USING (clinic_id = public.get_my_clinic_id());
 
 CREATE POLICY "Clinic isolation for tasks" ON public.tasks FOR ALL 
-USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+USING (clinic_id = public.get_my_clinic_id());
 
 CREATE POLICY "Clinic isolation for subtasks" ON public.subtasks FOR ALL 
-USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+USING (clinic_id = public.get_my_clinic_id());
 
 CREATE POLICY "Clinic isolation for sessions" ON public.sessions FOR ALL 
-USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+USING (clinic_id = public.get_my_clinic_id());
 
 CREATE POLICY "Clinic isolation for invites" ON public.invites FOR ALL 
-USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+USING (clinic_id = public.get_my_clinic_id());
 
 CREATE POLICY "Clinic isolation for assignment_requests" ON public.assignment_requests FOR ALL 
-USING (clinic_id IN (SELECT clinic_id FROM public.users WHERE id = auth.uid()));
+USING (clinic_id = public.get_my_clinic_id());
+
 
 
 -- TRIGGERS FOR MODIFIED COLUMN --
