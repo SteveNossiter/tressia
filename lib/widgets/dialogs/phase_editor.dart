@@ -163,8 +163,11 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
                 if (context.mounted) {
                   Navigator.pop(ctx);
                   Navigator.pop(context);
+                  if (isProfile) {
+                    Navigator.pop(context);
+                  }
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Client course deleted')),
+                    SnackBar(content: Text(isProfile ? 'Client profile deleted' : 'Client course deleted')),
                   );
                 }
               } catch (e) {

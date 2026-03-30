@@ -14,9 +14,28 @@ class SupabaseRepository {
         clientId: data['client_id'] ?? '',
         firstName: data['first_name'] ?? '',
         lastName: data['last_name'] ?? '',
+        clientCode: data['client_code'] ?? '',
+        dateOfBirth: data['date_of_birth'] != null
+            ? DateTime.parse(data['date_of_birth'])
+            : null,
+        address: data['address'] ?? '',
+        phone: data['phone'] ?? '',
+        email: data['email'] ?? '',
         clientType: data['client_type'] ?? 'Private',
+        ndisNumber: data['ndis_number'] ?? '',
         assignedTherapistIds: (data['assigned_therapist_ids'] as List<dynamic>?)
                 ?.map((e) => e.toString())
+                .toList() ??
+            [],
+        contacts: (data['contacts'] as List<dynamic>?)
+                ?.map((c) => Contact(
+                    firstName: c['first_name'] ?? '',
+                    lastName: c['last_name'] ?? '',
+                    phone: c['phone'] ?? '',
+                    email: c['email'] ?? '',
+                    role: c['role'] ?? '',
+                    isPrimary: c['is_primary'] ?? false,
+                  ))
                 .toList() ??
             [],
         notes: data['notes'] ?? '',
@@ -50,8 +69,22 @@ class SupabaseRepository {
         'client_id': p.clientId,
         'first_name': p.firstName,
         'last_name': p.lastName,
+        'client_code': p.clientCode,
+        'date_of_birth': p.dateOfBirth?.toIso8601String(),
+        'address': p.address,
+        'phone': p.phone,
+        'email': p.email,
         'client_type': p.clientType,
+        'ndis_number': p.ndisNumber,
         'assigned_therapist_ids': assignIds,
+        'contacts': p.contacts.map((c) => {
+          'first_name': c.firstName,
+          'last_name': c.lastName,
+          'phone': c.phone,
+          'email': c.email,
+          'role': c.role,
+          'is_primary': c.isPrimary,
+        }).toList(),
         'notes': p.notes,
         'start_date': p.startDate.toIso8601String(),
         'end_date': p.endDate.toIso8601String(),

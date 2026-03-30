@@ -310,7 +310,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: () =>
-                        showGlassDialog(context, const EntityCreator()),
+                        showGlassDialog(context, const EntityCreator(hideClientCourse: true)),
                     borderRadius: BorderRadius.circular(30),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -836,8 +836,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   ) {
     final theme = Theme.of(context);
     const double labelWidth = 140;
-    double timelineWidth = constraints.maxWidth - labelWidth;
-    if (timelineWidth < 300) timelineWidth = 300;
+    // Safeguard: If inside a scroll view, maxWidth might be Infinity. Use 1000 as fallback.
+    double availableWidth = constraints.maxWidth;
+    if (availableWidth == double.infinity || availableWidth <= 0) availableWidth = 1000;
+    double timelineWidth = availableWidth - labelWidth;
+    if (timelineWidth < 400) timelineWidth = 400; // Minimum usable area
 
     int totalUnits = 1;
     double unitWidth = 0;

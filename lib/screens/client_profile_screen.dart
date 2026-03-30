@@ -1056,9 +1056,14 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
   // =============================================
   Widget _buildTasksTab(BuildContext context, Project project) {
     final theme = Theme.of(context);
+    final allClientProjects =
+        ref.watch(projectsProvider)
+            .where((p) => p.clientId == project.clientId)
+            .map((p) => p.id)
+            .toSet();
     final tasks = ref
         .watch(tasksProvider)
-        .where((t) => t.projectId == project.id)
+        .where((t) => allClientProjects.contains(t.projectId))
         .toList();
     final subtasks = ref.watch(subtasksProvider);
 

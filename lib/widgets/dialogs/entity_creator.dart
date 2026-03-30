@@ -17,7 +17,10 @@ class EntityCreator extends ConsumerStatefulWidget {
     this.initialEntityType,
     this.initialParentPhaseId,
     this.initialParentTaskId,
+    this.hideClientCourse = false,
   }) : super(key: key);
+
+  final bool hideClientCourse;
 
   @override
   _EntityCreatorState createState() => _EntityCreatorState();
@@ -323,7 +326,9 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                   color: theme.primaryColor,
                 ),
                 items:
-                    ['Client Course', 'Project', 'Task', 'Subtask', 'Session']
+                    (widget.hideClientCourse
+                            ? ['Project', 'Task', 'Subtask']
+                            : ['Client Course', 'Project', 'Task', 'Subtask', 'Session'])
                         .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                         .toList(),
                 onChanged: (v) {

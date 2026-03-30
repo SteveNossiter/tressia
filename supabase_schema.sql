@@ -70,6 +70,13 @@ CREATE TABLE public.projects (
     last_name TEXT,
     client_type TEXT,
     assigned_therapist_ids UUID[] DEFAULT '{}',
+    client_code TEXT,
+    date_of_birth DATE,
+    address TEXT,
+    phone TEXT,
+    email TEXT,
+    ndis_number TEXT,
+    contacts JSONB DEFAULT '[]',
     notes TEXT,
     start_date TIMESTAMPTZ NOT NULL,
     end_date TIMESTAMPTZ NOT NULL,
@@ -145,6 +152,17 @@ CREATE TABLE public.assignment_requests (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE public.assignment_requests ENABLE ROW LEVEL SECURITY;
+
+-- -----------------------------------------------------------------------------
+-- MIGRATION: Add missing columns to projects for demographics
+-- -----------------------------------------------------------------------------
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS client_code TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS ndis_number TEXT;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS contacts JSONB DEFAULT '[]';
 
 -- Helper function to bypass RLS on self-referencing policies
 CREATE OR REPLACE FUNCTION public.get_my_clinic_id()
