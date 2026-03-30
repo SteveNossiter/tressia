@@ -156,7 +156,6 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
               template?.clientCode ?? 'INT-${DateTime.now().millisecond}',
           clientType: isClientCourse ? _selectedClientType : 'Internal Project',
           assignedTherapistIds: _assignedTherapistIds,
-          notes: _descCtrl.text,
           startDate: _startDate,
           endDate: _endDate,
           color: _color,
@@ -187,9 +186,7 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                 startDate: _startDate,
                 endDate: _endDate,
                 color: _color,
-                assignedUserIds: _assignedTherapistIds.isEmpty
-                    ? ['unassigned']
-                    : _assignedTherapistIds,
+                assignedUserIds: _assignedTherapistIds,
               ),
             );
       } else if (isSession) {
@@ -255,9 +252,7 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                 startDate: _startDate,
                 endDate: _endDate,
                 color: _color,
-                assignedUserIds: _assignedTherapistIds.isEmpty
-                    ? ['unassigned']
-                    : _assignedTherapistIds,
+                assignedUserIds: _assignedTherapistIds,
               ),
             );
       }

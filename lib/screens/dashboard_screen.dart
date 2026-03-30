@@ -203,7 +203,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       final matchesType =
           _filterType == 'All' ||
-          (_filterType == 'Client Course' && p.clientType != 'Internal Project') ||
+          (_filterType == 'Client Course' && p.clientType != 'Internal Project' && !p.clientType.startsWith('Profile:')) ||
           (_filterType == 'Project' && p.clientType == 'Internal Project');
 
       final matchesTherapist =
@@ -1273,10 +1273,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           duration: const Duration(milliseconds: 300),
           margin: const EdgeInsets.only(bottom: 24),
           decoration: BoxDecoration(
-            color: p.color.withValues(alpha: 0.12),
+            color: p.color.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: p.color.withValues(alpha: 0.3),
+              color: p.color,
             ),
           ),
           child: Column(
@@ -1315,13 +1315,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 color: theme.colorScheme.onSurface,
                               ),
                             ),
-                            Text(
-                              p.clientType,
-                              style: GoogleFonts.outfit(
-                                fontSize: 10,
-                                color: theme.hintColor,
+                             Text(
+                                p.clientType.replaceFirst('Profile: ', ''),
+                                style: GoogleFonts.outfit(
+                                  fontSize: 10,
+                                  color: theme.hintColor,
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),

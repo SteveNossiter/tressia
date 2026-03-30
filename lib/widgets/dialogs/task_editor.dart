@@ -83,7 +83,7 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
       startDate: _startDate,
       endDate: _endDate,
       color: _color,
-      assignedUserIds: _assignedUserIds.isEmpty ? ['unassigned'] : _assignedUserIds,
+      assignedUserIds: _assignedUserIds,
     );
     ref.read(tasksProvider.notifier).updateTask(upd);
     setState(() => _isEditing = false);

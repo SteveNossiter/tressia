@@ -127,9 +127,9 @@ class _ClientCreatorDialogState extends ConsumerState<ClientCreatorDialog> {
     final firstName = _firstNameCtrl.text.trim();
     final lastName = _lastNameCtrl.text.trim();
 
+    final title = '$firstName $lastName'.trim();
     final newProject = Project(
-      title:
-          '$firstName $lastName${lastName.isNotEmpty ? '' : ''} - ${_clientType == 'NDIS' ? 'NDIS' : 'Therapy'}',
+      title: title,
       clientId: 'c_${DateTime.now().millisecondsSinceEpoch}',
       firstName: firstName,
       lastName: lastName,
@@ -138,9 +138,9 @@ class _ClientCreatorDialogState extends ConsumerState<ClientCreatorDialog> {
       address: _addressCtrl.text.trim(),
       phone: _phoneCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
-      clientType: _clientType,
+      clientType: 'Profile: $_clientType',
       ndisNumber: _ndisNumberCtrl.text.trim(),
-      assignedTherapistIds: _assignedTherapistIds.isEmpty ? ['unassigned'] : _assignedTherapistIds,
+      assignedTherapistIds: _assignedTherapistIds,
       contacts: [
         if (_clientType == 'NDIS' && _pmFirstCtrl.text.isNotEmpty)
           Contact(

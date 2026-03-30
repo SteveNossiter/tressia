@@ -29,30 +29,44 @@ class _UserCreatorState extends ConsumerState<UserCreator> {
     Colors.amber,
   ];
 
-  void _save() {
+  Future<void> _save() async {
     if (_firstCtrl.text.isEmpty || _emailCtrl.text.isEmpty) return;
 
     final fullName = '${_firstCtrl.text} ${_lastCtrl.text}'.trim();
     final currentUser = ref.read(currentUserProvider);
-    ref.read(systemUsersProvider.notifier).addUser(
-          AppUser(
-            id: 'u_${DateTime.now().millisecondsSinceEpoch}',
-            clinicId: currentUser.clinicId,
-            name: fullName,
-            firstName: _firstCtrl.text.trim(),
-            lastName: _lastCtrl.text.trim(),
-            role: _role,
-            userColor: _color,
-            email: _emailCtrl.text.trim(),
-            phone: _phoneCtrl.text.trim(),
-            startDate: DateTime.now(),
+
+    try {
+      await ref.read(systemUsersProvider.notifier).addUser(
+            AppUser(
+              id: '', // Will be assigned by Supabase
+              clinicId: currentUser.clinicId,
+              name: fullName,
+              firstName: _firstCtrl.text.trim(),
+              lastName: _lastCtrl.text.trim(),
+              role: _role,
+              userColor: _color,
+              email: _emailCtrl.text.trim(),
+              phone: _phoneCtrl.text.trim(),
+              startDate: DateTime.now(),
+            ),
+          );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invitation sent to ${_emailCtrl.text}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error inviting user: $e'),
+            backgroundColor: Colors.red,
           ),
         );
-
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Invitation sent to ${_emailCtrl.text}')),
-    );
+      }
+    }
   }
 
   @override

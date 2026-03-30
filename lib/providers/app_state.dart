@@ -118,9 +118,32 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
     return [];
   }
 
-  void addUser(AppUser u) {}
-  void updateUser(AppUser u) {}
-  void removeUser(String id) {}
+  final _repo = SupabaseRepository();
+
+  Future<void> addUser(AppUser u) async {
+    final currentUser = ref.read(currentUserProvider);
+    if (currentUser.clinicId.isEmpty) return;
+    try {
+      await _repo.inviteUser(u.email, u.role.name, currentUser.clinicId);
+    } catch (e) {
+      debugPrint('SystemUsersNotifier.addUser Error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateUser(AppUser u) async {
+    // Current user can update their profile via auth/users table
+    // For other users, usually restricted by RLS
+  }
+
+  Future<void> removeUser(String id) async {
+    try {
+      await _repo.deleteUser(id);
+    } catch (e) {
+      debugPrint('SystemUsersNotifier.removeUser Error: $e');
+      rethrow;
+    }
+  }
 }
 
 AppUser _mapToAppUser(Map<String, dynamic> data) {

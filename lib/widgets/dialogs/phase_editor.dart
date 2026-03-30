@@ -101,7 +101,7 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
       startDate: _startDate,
       endDate: _endDate,
       clientType: _clientType,
-      assignedTherapistIds: _assignedTherapistIds.isEmpty ? ['unassigned'] : _assignedTherapistIds,
+      assignedTherapistIds: _assignedTherapistIds,
       contacts: _contacts,
     );
     ref.read(projectsProvider.notifier).updateProject(upd);
@@ -143,22 +143,36 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
-              // Cascade delete: subtasks → tasks → project
-              for (final s in allSubs) {
-                ref.read(subtasksProvider.notifier).removeSubtask(s.id);
+            onPressed: () async {
+              try {
+                // Cascade delete: subtasks → tasks → project
+                for (final s in allSubs) {
+                  await ref.read(subtasksProvider.notifier).removeSubtask(s.id);
+                }
+                for (final t in tasks) {
+                  await ref.read(tasksProvider.notifier).removeTask(t.id);
+                }
+                await ref
+                    .read(projectsProvider.notifier)
+                    .removeProject(widget.project.id);
+                
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Client course deleted')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting project: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               }
-              for (final t in tasks) {
-                ref.read(tasksProvider.notifier).removeTask(t.id);
-              }
-              ref
-                  .read(projectsProvider.notifier)
-                  .removeProject(widget.project.id);
-              Navigator.pop(ctx);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Client course deleted')),
-              );
             },
             child: const Text('Delete All'),
           ),

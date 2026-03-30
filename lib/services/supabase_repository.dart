@@ -41,9 +41,7 @@ class SupabaseRepository {
 
   Future<void> saveProject(Project p, String clinicId) async {
     try {
-      List<String> assignIds = p.assignedTherapistIds.isNotEmpty
-          ? p.assignedTherapistIds
-          : [_client.auth.currentUser?.id ?? ''];
+      List<String> assignIds = p.assignedTherapistIds;
 
       await _client.from('projects').upsert({
         'id': p.id,
@@ -107,9 +105,7 @@ class SupabaseRepository {
 
   Future<void> saveTask(ProjectTask t, String clinicId) async {
     try {
-      List<String> assignIds = t.assignedUserIds.isNotEmpty
-          ? t.assignedUserIds
-          : [_client.auth.currentUser?.id ?? ''];
+      List<String> assignIds = t.assignedUserIds;
       await _client.from('tasks').upsert({
         'id': t.id,
         'clinic_id': clinicId,
@@ -171,9 +167,7 @@ class SupabaseRepository {
 
   Future<void> saveSubtask(Subtask s, String clinicId) async {
     try {
-      List<String> assignIds = s.assignedUserIds.isNotEmpty
-          ? s.assignedUserIds
-          : [_client.auth.currentUser?.id ?? ''];
+      List<String> assignIds = s.assignedUserIds;
       await _client.from('subtasks').upsert({
         'id': s.id,
         'clinic_id': clinicId,
@@ -240,9 +234,7 @@ class SupabaseRepository {
 
   Future<void> saveSession(Session s, String clinicId) async {
     try {
-      List<String> assignIds = s.therapistIds.isNotEmpty
-          ? s.therapistIds
-          : [_client.auth.currentUser?.id ?? ''];
+      List<String> assignIds = s.therapistIds;
       await _client.from('sessions').upsert({
         'id': s.id,
         'clinic_id': clinicId,
@@ -267,6 +259,32 @@ class SupabaseRepository {
       await _client.from('sessions').delete().eq('id', id);
     } catch (e) {
       debugPrint('SupabaseRepository.deleteSession Error: $e');
+      rethrow;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // USERS & INVITES
+  // ---------------------------------------------------------------------------
+  Future<void> inviteUser(String email, String role, String clinicId) async {
+    try {
+      await _client.from('invites').upsert({
+        'clinic_id': clinicId,
+        'email': email,
+        'role': role,
+        'created_by': _client.auth.currentUser?.id,
+      });
+    } catch (e) {
+      debugPrint('SupabaseRepository.inviteUser Error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteUser(String id) async {
+    try {
+      await _client.from('users').delete().eq('id', id);
+    } catch (e) {
+      debugPrint('SupabaseRepository.deleteUser Error: $e');
       rethrow;
     }
   }
@@ -297,16 +315,19 @@ class SupabaseRepository {
   Color _parseColor(String? hex) {
     if (hex == null || hex.isEmpty) return const Color(0xFF38BDF8);
     try {
-      return Color(int.parse(hex.replaceFirst('#', ''), radix: 16));
+      String cleanHex = hex.replaceFirst('#', '');
+      if (cleanHex.length == 6) cleanHex = 'FF$cleanHex';
+      return Color(int.parse(cleanHex, radix: 16));
     } catch (_) {
       return const Color(0xFF38BDF8);
     }
   }
-
   Color? _parseColorNullable(String? hex) {
     if (hex == null || hex.isEmpty) return null;
     try {
-      return Color(int.parse(hex.replaceFirst('#', ''), radix: 16));
+      String cleanHex = hex.replaceFirst('#', '');
+      if (cleanHex.length == 6) cleanHex = 'FF$cleanHex';
+      return Color(int.parse(cleanHex, radix: 16));
     } catch (_) {
       return null;
     }

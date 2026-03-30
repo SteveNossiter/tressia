@@ -24,20 +24,35 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
     final sessions = ref.watch(sessionsProvider);
     final users = ref.watch(systemUsersProvider);
 
-    // Role-filtered: Admin sees all, therapist sees only assigned
-    final projects = currentUser.isAdmin
-        ? allProjects
-        : allProjects
-              .where((p) => p.assignedTherapistIds.contains(currentUser.id))
-              .toList();
+    // 1. Group by clientId to show only ONE entry per actual "Client"
+    // 2. Prioritize entries marked with "Profile: "
+    final Map<String, Project> clientMap = {};
+    for (final p in (currentUser.isAdmin ? allProjects : allProjects.where((p) => p.assignedTherapistIds.contains(currentUser.id)))) {
+      if (p.clientType == 'Internal Project') continue;
+      
+      final existing = clientMap[p.clientId];
+      if (existing == null) {
+        clientMap[p.clientId] = p;
+      } else {
+        // If we find a "Profile: " entry, it wins as the main contact record
+        if (p.clientType.startsWith('Profile: ')) {
+          clientMap[p.clientId] = p;
+        }
+      }
+    }
 
-    final filtered = projects.where((p) {
+    final filtered = clientMap.values.where((p) {
       if (_search.isEmpty) return true;
       final q = _search.toLowerCase();
-      return p.clientName.toLowerCase().contains(q) ||
-          p.clientCode.toLowerCase().contains(q) ||
-          p.clientType.toLowerCase().contains(q);
-    }).toList();
+      final nameMatches = p.clientName.toLowerCase().contains(q);
+      final codeMatches = p.clientCode.toLowerCase().contains(q);
+      // Strip "Profile: " from type for searching convenience
+      final typeForSearch = p.clientType.replaceFirst('Profile: ', '').toLowerCase();
+      final typeMatches = typeForSearch.contains(q);
+      
+      return nameMatches || codeMatches || typeMatches;
+    }).toList()
+      ..sort((a, b) => a.clientName.compareTo(b.clientName));
 
     return Scaffold(
       appBar: AppBar(
@@ -209,7 +224,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                                                   BorderRadius.circular(4),
                                             ),
                                             child: Text(
-                                              p.clientType,
+                                              p.clientType.replaceFirst('Profile: ', ''),
                                               style: GoogleFonts.outfit(
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.bold,
@@ -294,7 +309,8 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
   }
 
   Color _typeColor(String type) {
-    switch (type) {
+    final t = type.replaceFirst('Profile: ', '');
+    switch (t) {
       case 'NDIS':
         return Colors.blue;
       case 'Medicare':

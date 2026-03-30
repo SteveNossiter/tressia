@@ -25,15 +25,23 @@ class _BlockCalendarState extends ConsumerState<BlockCalendar> {
     final dayEnd = dayStart.add(const Duration(days: 1));
     final tasks = widget.tasks;
     final subtasks = ref.read(subtasksProvider);
+    final sessions = ref.read(sessionsProvider);
 
     List<dynamic> events = [];
     for (var t in tasks) {
-      if (t.startDate.isBefore(dayEnd) && t.endDate.isAfter(dayStart))
+      if (t.startDate.isBefore(dayEnd) && t.endDate.isAfter(dayStart)) {
         events.add(t);
+      }
     }
     for (var s in subtasks) {
-      if (s.startDate.isBefore(dayEnd) && s.endDate.isAfter(dayStart))
+      if (s.startDate.isBefore(dayEnd) && s.endDate.isAfter(dayStart)) {
         events.add(s);
+      }
+    }
+    for (var sess in sessions) {
+      if (sess.date.isBefore(dayEnd) && sess.date.isAfter(dayStart)) {
+        events.add(sess);
+      }
     }
     return events;
   }
@@ -44,6 +52,7 @@ class _BlockCalendarState extends ConsumerState<BlockCalendar> {
     for (var e in events) {
       if (e is ProjectTask) colors.add(e.color);
       if (e is Subtask) colors.add(e.color ?? Colors.grey);
+      if (e is Session) colors.add(Colors.green);
     }
     return colors.take(4).toList();
   }
@@ -60,9 +69,9 @@ class _BlockCalendarState extends ConsumerState<BlockCalendar> {
           focusedDay: _focusedDay,
           selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
           onDaySelected: (selected, focused) => setState(() {
-            _selectedDay = selected;
-            _focusedDay = focused;
-          }),
+                _selectedDay = selected;
+                _focusedDay = focused;
+              }),
           eventLoader: _getEventsForDay,
           calendarBuilders: CalendarBuilders(
             markerBuilder: (ctx, day, events) {
@@ -75,14 +84,14 @@ class _BlockCalendarState extends ConsumerState<BlockCalendar> {
                   children: colors
                       .map(
                         (c) => Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: c,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                              margin: const EdgeInsets.symmetric(horizontal: 1),
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: c,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
                       )
                       .toList(),
                 ),
@@ -206,6 +215,32 @@ class _BlockCalendarState extends ConsumerState<BlockCalendar> {
                 style: GoogleFonts.outfit(fontSize: 10, color: theme.hintColor),
               ),
               onTap: () => showGlassDialog(context, SubtaskEditor(subtask: e)),
+            ),
+          );
+        } else if (e is Session) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.green.withValues(alpha: 0.3)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.psychology, color: Colors.green),
+              title: Text(
+                'Client Session',
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              subtitle: Text(
+                '${e.status.name.toUpperCase()} • ${e.type.name}',
+                style: GoogleFonts.outfit(fontSize: 11, color: theme.hintColor),
+              ),
+              onTap: () {
+                // Navigate to Session Dashboard or similar
+              },
             ),
           );
         }

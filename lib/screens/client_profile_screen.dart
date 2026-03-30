@@ -71,7 +71,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
               ),
             ),
             Text(
-              '${project.clientCode}  •  ${project.clientType}',
+              '${project.clientCode}  •  ${project.clientType.replaceFirst('Profile: ', '')}',
               style: GoogleFonts.outfit(fontSize: 11, color: theme.hintColor),
             ),
           ],
@@ -973,52 +973,75 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                final newSession = Session(
-                  clientId: project.id,
-                  therapistIds: project.assignedTherapistIds,
-                  date: selectedDate,
-                  startTime: selectedTime,
-                  type: sessionType,
-                  status: SessionStatus.scheduled,
-                );
+              onPressed: () async {
+                try {
+                  final combinedDateTime = DateTime(
+                    selectedDate.year,
+                    selectedDate.month,
+                    selectedDate.day,
+                    selectedTime.hour,
+                    selectedTime.minute,
+                  );
 
-                // Add to sessions list
-                ref.read(sessionsProvider.notifier).addSession(newSession);
+                  final newSession = Session(
+                    clientId: project.id,
+                    therapistIds: project.assignedTherapistIds,
+                    date: combinedDateTime,
+                    type: sessionType,
+                    status: SessionStatus.scheduled,
+                    generalDiscussion: '',
+                    generalMood: '',
+                    therapistNotes: '',
+                  );
 
-                // Also add as a subtask under "Therapy Sessions" task for Gantt visibility
-                final tasks = ref.read(tasksProvider);
-                final therapyTask = tasks.firstWhere(
-                  (t) =>
-                      t.projectId == project.id &&
-                      t.title == 'Therapy Sessions',
-                  orElse: () {
-                    final t = ProjectTask(
+                  // 1. Add actual session record
+                  await ref.read(sessionsProvider.notifier).addSession(newSession);
+
+                  // 2. Manage visibility task
+                  final tasks = ref.read(tasksProvider);
+                  ProjectTask? therapyTask = tasks
+                      .where((t) => t.projectId == project.id && t.title == 'Therapy Sessions')
+                      .firstOrNull;
+
+                  if (therapyTask == null) {
+                    therapyTask = ProjectTask(
                       projectId: project.id,
                       title: 'Therapy Sessions',
                       startDate: project.startDate,
                       endDate: project.endDate,
                       color: Colors.blueAccent,
                     );
-                    ref.read(tasksProvider.notifier).addTask(t);
-                    return t;
-                  },
-                );
+                    await ref.read(tasksProvider.notifier).addTask(therapyTask);
+                  }
 
-                ref
-                    .read(subtasksProvider.notifier)
-                    .addSubtask(
-                      Subtask(
-                        taskId: therapyTask.id,
-                        title:
-                            'Session: ${DateFormat('d/M').format(selectedDate)} @ ${selectedTime.format(context)}',
-                        startDate: selectedDate,
-                        endDate: selectedDate,
-                        color: Colors.blueAccent,
+                  // 3. Add as subtask for visibility
+                  await ref.read(subtasksProvider.notifier).addSubtask(
+                        Subtask(
+                          taskId: therapyTask.id,
+                          title:
+                              'Session: ${DateFormat('d/M').format(selectedDate)} @ ${selectedTime.format(context)}',
+                          startDate: combinedDateTime,
+                          endDate: combinedDateTime.add(const Duration(hours: 1)),
+                          color: Colors.blueAccent,
+                        ),
+                      );
+
+                  if (mounted) {
+                    Navigator.pop(dCtx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Session scheduled successfully')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error scheduling session: $e'),
+                        backgroundColor: Colors.red,
                       ),
                     );
-
-                Navigator.pop(dCtx);
+                  }
+                }
               },
               child: const Text('Schedule'),
             ),
@@ -1700,7 +1723,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
                         firstName: project.firstName,
                         lastName: project.lastName,
                         clientCode: project.clientCode,
-                        clientType: project.clientType,
+                        clientType: project.clientType.replaceFirst('Profile: ', ''),
                         startDate: startDate,
                         endDate: endDate,
                         assignedTherapistIds: project.assignedTherapistIds,

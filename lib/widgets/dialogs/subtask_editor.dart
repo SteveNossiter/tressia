@@ -81,7 +81,7 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
       startDate: _startDate,
       endDate: _endDate,
       color: _color,
-      assignedUserIds: _assignedUserIds.isEmpty ? ['unassigned'] : _assignedUserIds,
+      assignedUserIds: _assignedUserIds,
       status: _status,
     );
     ref.read(subtasksProvider.notifier).updateSubtask(upd);
