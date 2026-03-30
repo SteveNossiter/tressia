@@ -180,14 +180,27 @@ class _ClientCreatorDialogState extends ConsumerState<ClientCreatorDialog> {
       endDate: DateTime.now().add(const Duration(days: 365)),
     );
 
-    ref.read(projectsProvider.notifier).addProject(newProject);
-    Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (c) => ClientProfileScreen(clientProject: newProject),
-      ),
-    );
+    _save() async {
+      try {
+        await ref.read(projectsProvider.notifier).addProject(newProject);
+        if (mounted) {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (c) => ClientProfileScreen(clientProject: newProject),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error saving client: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+    _save();
   }
 
   @override

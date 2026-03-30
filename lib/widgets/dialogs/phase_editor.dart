@@ -117,10 +117,14 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
         tasks.any((t) => t.status != TaskStatus.done) ||
         allSubs.any((s) => s.status != TaskStatus.done);
 
+    final isProfile = widget.project.clientType.startsWith('Profile:');
+    final titleString = isProfile ? 'Full Client Profile' : 'Client Course';
+    
     String message;
-    if (hasIncomplete) {
-      message =
-          'You still have incomplete tasks and subtasks in this client course/project.\n\nAre you sure you want to delete "${widget.project.title}" and all associated items?';
+    if (isProfile) {
+      message = 'CAUTION: This will permanently delete the entire profile for "${widget.project.clientName}", including all their demographic details and clinical associations. This cannot be undone.\n\nAre you absolutely sure?';
+    } else if (hasIncomplete) {
+      message = 'You still have incomplete tasks and subtasks in this client course/project.\n\nAre you sure you want to delete "${widget.project.title}" and all associated items?';
     } else {
       message = 'Are you sure you want to delete "${widget.project.title}"?';
     }
@@ -129,8 +133,8 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(
-          'Delete Client Course',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+          'Delete $titleString',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: isProfile ? Colors.red : null),
         ),
         content: Text(message, style: GoogleFonts.outfit()),
         actions: [

@@ -201,10 +201,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       final anyTaskMatch = filteredTasks.any((t) => t.projectId == p.id);
 
-      final matchesType =
+      final matchesType = !p.clientType.startsWith('Profile:') && (
           _filterType == 'All' ||
-          (_filterType == 'Client Course' && p.clientType != 'Internal Project' && !p.clientType.startsWith('Profile:')) ||
-          (_filterType == 'Project' && p.clientType == 'Internal Project');
+          (_filterType == 'Client Course' && p.clientType != 'Internal Project') ||
+          (_filterType == 'Project' && p.clientType == 'Internal Project')
+      );
 
       final matchesTherapist =
           _filterTherapistId == null ||
