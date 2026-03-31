@@ -1036,7 +1036,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               _buildDayRow(
                                 context,
                                 '      ↳ ${s.title}',
-                                s.color ?? t.color.withValues(alpha: 0.6),
+                                s.color ?? t.color,
                                 labelWidth,
                                 maxTotalWidth,
                                 () => _openSubtaskEditor(s),
@@ -1408,7 +1408,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 ),
                                 color: allDone
                                     ? theme.scaffoldBackgroundColor
-                                    : t.color.withValues(alpha: 0.25),
+                                    : t.color,
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.08),
@@ -1564,7 +1564,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         decoration: BoxDecoration(
           color: isDone
               ? theme.cardTheme.color
-              : chosenColor.withValues(alpha: 0.35),
+              : chosenColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: subtaskUrgency == 2
