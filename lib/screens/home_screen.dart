@@ -30,7 +30,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     (Icons.people_outlined, 'Clients'),
     (Icons.business_outlined, 'Providers'),
     if (isAdmin) (Icons.group_outlined, 'Users'),
-    (Icons.settings_outlined, 'Clinic'),
+    (Icons.home_work_outlined, 'Clinic'),
   ];
 
   List<Widget> _pages(bool isAdmin) => [

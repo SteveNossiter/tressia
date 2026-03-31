@@ -1408,7 +1408,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 ),
                                 color: allDone
                                     ? theme.scaffoldBackgroundColor
-                                    : t.color,
+                                    : t.color.withValues(alpha: 0.65),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.08),
@@ -1564,7 +1564,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         decoration: BoxDecoration(
           color: isDone
               ? theme.cardTheme.color
-              : chosenColor,
+              : chosenColor.withValues(alpha: 0.65),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: subtaskUrgency == 2

@@ -252,25 +252,18 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            p.color.withValues(alpha: 0.12),
-            p.color.withValues(alpha: 0.04),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: theme.cardTheme.color ?? theme.scaffoldBackgroundColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: p.color.withValues(alpha: 0.2)),
+        border: Border.all(color: p.color.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: p.color.withValues(alpha: 0.03),
-            blurRadius: 5,
+            color: p.color.withValues(alpha: 0.02),
+            blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
@@ -339,21 +332,27 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
           // Stats row
           Row(
             children: [
-              _statChip(Icons.psychology, '$sessionCount', 'Sessions', theme),
+              Expanded(
+                child: _statChip(Icons.psychology, '$sessionCount', 'Sessions', theme),
+              ),
               const SizedBox(width: 12),
-              _statChip(
-                Icons.person,
-                therapist.split(' ').first,
-                'Therapist',
-                theme,
+              Expanded(
+                child: _statChip(
+                  Icons.person,
+                  therapist,
+                  'Therapist',
+                  theme,
+                ),
               ),
               const SizedBox(width: 12),
               if (nextSession != null)
-                _statChip(
-                  Icons.calendar_today,
-                  DateFormat('d MMM').format(nextSession.date),
-                  'Next',
-                  theme,
+                Expanded(
+                  child: _statChip(
+                    Icons.calendar_today,
+                    DateFormat('d MMM').format(nextSession.date),
+                    'Next Session',
+                    theme,
+                  ),
                 ),
             ],
           ),

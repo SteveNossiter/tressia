@@ -56,6 +56,7 @@ class _UserCard extends ConsumerWidget {
     final projects = ref.watch(projectsProvider);
     final currentClients = projects
         .where((p) => p.assignedTherapistIds.contains(user.id))
+        .where((p) => !p.clientType.startsWith('Profile:'))
         .toList();
 
     return Container(
@@ -338,6 +339,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     final projects = ref.watch(projectsProvider);
     final currentClients = projects
         .where((p) => p.assignedTherapistIds.contains(user.id))
+        .where((p) => !p.clientType.startsWith('Profile:'))
         .toList();
     final pastClients =
         <Project>[]; // Placeholder for when clients are archived

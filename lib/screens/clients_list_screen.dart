@@ -155,14 +155,21 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                         orElse: () => users.first,
                       );
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: theme.cardTheme.color ?? theme.scaffoldBackgroundColor,
                           borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: theme.dividerColor.withValues(alpha: 0.15),
+                          border: Border.all(
+                            color: theme.dividerColor.withValues(alpha: 0.1),
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
