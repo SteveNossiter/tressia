@@ -173,8 +173,9 @@ class _UserCard extends ConsumerWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+);
+}
 
   Color _roleColor(UserRole r) {
     switch (r) {
