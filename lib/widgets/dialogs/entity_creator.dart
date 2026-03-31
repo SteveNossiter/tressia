@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/project_module.dart';
-import '../../models/project_module.dart';
 import '../../providers/app_state.dart';
 import '../multi_select_dropdown.dart';
 

@@ -70,13 +70,12 @@ class CurrentUserNotifier extends Notifier<AppUser> {
         state = _mapToAppUser(data);
       } else {
         // User record doesn't exist or RLS blocked it
-        print('TRESSIA DEBUG: _fetchUser returned null for userId=$userId');
+        debugPrint('TRESSIA DEBUG: _fetchUser returned null for userId=$userId');
       }
     } catch (e) {
-      print('TRESSIA DEBUG: _fetchUser error: $e');
+      debugPrint('TRESSIA DEBUG: _fetchUser error: $e');
     }
   }
-
 
   void setUser(AppUser u) => state = u;
 
