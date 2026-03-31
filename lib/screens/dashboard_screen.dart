@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -835,12 +836,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     GanttScale scale,
   ) {
     final theme = Theme.of(context);
-    const double labelWidth = 140;
-    // Safeguard: If inside a scroll view, maxWidth might be Infinity. Use 1000 as fallback.
     double availableWidth = constraints.maxWidth;
-    if (availableWidth == double.infinity || availableWidth <= 0) availableWidth = 1000;
-    double timelineWidth = availableWidth - labelWidth;
-    if (timelineWidth < 400) timelineWidth = 400; // Minimum usable area
+    // Enhanced finite check
+    if (availableWidth <= 0 || availableWidth.isInfinite || availableWidth.isNaN) {
+      availableWidth = 1000;
+    }
+    const double labelWidth = 140;
+    double timelineWidth = (availableWidth - labelWidth).clamp(400.0, double.infinity);
 
     int totalUnits = 1;
     double unitWidth = 0;
@@ -1397,7 +1399,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 color: allDone
                                     ? theme.scaffoldBackgroundColor
                                     : t.color.withValues(alpha: 0.25),
-                                boxShadow: [],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
                               clipBehavior: Clip.antiAlias,
                               child: IntrinsicHeight(

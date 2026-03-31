@@ -77,7 +77,7 @@ class SupabaseRepository {
         'client_type': p.clientType,
         'ndis_number': p.ndisNumber,
         'assigned_therapist_ids': assignIds,
-        'contacts': p.contacts.map((c) => {
+        'contacts': p.contacts.map((c) => <String, dynamic>{
           'first_name': c.firstName,
           'last_name': c.lastName,
           'phone': c.phone,
