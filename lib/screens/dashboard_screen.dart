@@ -795,6 +795,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               boxShadow: [
                 BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+                BoxShadow(
                   color: invertedTheme.primaryColor.withValues(alpha: 0.03),
                   blurRadius: 28,
                   offset: const Offset(0, 10),
@@ -1281,9 +1286,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           decoration: BoxDecoration(
             color: p.color.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: p.color,
-            ),
+            border: Border.all(color: p.color),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1562,7 +1572,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 : (subtaskUrgency == 1 ? Colors.amber : Colors.transparent),
             width: subtaskUrgency > 0 ? 4.0 : 1.0,
           ),
-          boxShadow: [],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: IntrinsicHeight(
           child: Row(

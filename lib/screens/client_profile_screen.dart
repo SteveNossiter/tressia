@@ -254,14 +254,26 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            theme.primaryColor.withValues(alpha: 0.12),
-            theme.primaryColor.withValues(alpha: 0.04),
+            p.color.withValues(alpha: 0.12),
+            p.color.withValues(alpha: 0.04),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: theme.primaryColor.withValues(alpha: 0.2)),
+        border: Border.all(color: p.color.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: p.color.withValues(alpha: 0.03),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -270,13 +282,13 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
             children: [
               CircleAvatar(
                 radius: 28,
-                backgroundColor: theme.primaryColor.withValues(alpha: 0.15),
+                backgroundColor: p.color.withValues(alpha: 0.15),
                 child: Text(
                   '${p.firstName.isNotEmpty ? p.firstName[0] : '?'}${p.lastName.isNotEmpty ? p.lastName[0] : ''}',
                   style: GoogleFonts.outfit(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: theme.primaryColor,
+                    color: p.color,
                   ),
                 ),
               ),
@@ -1077,7 +1089,10 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () =>
-                      showGlassDialog(context, const EntityCreator()),
+                      showGlassDialog(
+                        context,
+                        EntityCreator(initialClientId: project.clientId),
+                      ),
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Add Task'),
                   style: ElevatedButton.styleFrom(

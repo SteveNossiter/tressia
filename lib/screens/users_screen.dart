@@ -58,39 +58,58 @@ class _UserCard extends ConsumerWidget {
         .where((p) => p.assignedTherapistIds.contains(user.id))
         .toList();
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: user.userColor.withValues(alpha: 0.2)),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color ?? theme.scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: user.userColor.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: user.userColor.withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: currentUser.isAdmin || currentUser.id == user.id
-            ? () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => UserProfileScreen(user: user),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: currentUser.isAdmin || currentUser.id == user.id
+              ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserProfileScreen(user: user),
+                    ),
+                  )
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: user.userColor.withValues(alpha: 0.15),
+                  backgroundImage: (user.base64Photo != null && user.base64Photo!.isNotEmpty)
+                      ? MemoryImage(base64Decode(user.base64Photo!))
+                      : null,
+                  child: (user.base64Photo == null || user.base64Photo!.isEmpty)
+                      ? Text(
+                          user.initials,
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: user.userColor,
+                          ),
+                        )
+                      : null,
                 ),
-              )
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: user.userColor.withValues(alpha: 0.15),
-                child: Text(
-                  user.initials,
-                  style: GoogleFonts.outfit(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: user.userColor,
-                  ),
-                ),
-              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(

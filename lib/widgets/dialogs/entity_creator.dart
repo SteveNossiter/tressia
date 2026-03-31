@@ -10,12 +10,14 @@ class EntityCreator extends ConsumerStatefulWidget {
   final String? initialEntityType;
   final String? initialParentPhaseId;
   final String? initialParentTaskId;
+  final String? initialClientId;
 
   const EntityCreator({
     Key? key,
     this.initialEntityType,
     this.initialParentPhaseId,
     this.initialParentTaskId,
+    this.initialClientId,
     this.hideClientCourse = false,
   }) : super(key: key);
 
@@ -393,6 +395,14 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                       ),
                       value: _parentPhaseId,
                       items: projects
+                          .where((p) {
+                            // Filter: Exclude administrative "Profile" projects for clinical tasks.
+                            // If on a specific client profile, only show their courses.
+                            if (p.clientType.startsWith('Profile:')) return false;
+                            if (widget.initialClientId != null &&
+                                p.clientId != widget.initialClientId) return false;
+                            return true;
+                          })
                           .map(
                             (p) => DropdownMenuItem(
                               value: p.id,
@@ -439,6 +449,12 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                       decoration: _dec('Client Course / Project *', theme),
                       value: _parentPhaseId,
                       items: projects
+                          .where((p) {
+                            if (p.clientType.startsWith('Profile:')) return false;
+                            if (widget.initialClientId != null &&
+                                p.clientId != widget.initialClientId) return false;
+                            return true;
+                          })
                           .map(
                             (p) => DropdownMenuItem(
                               value: p.id,
