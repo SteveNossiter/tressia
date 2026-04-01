@@ -263,13 +263,10 @@ CREATE OR REPLACE FUNCTION public.handle_auth_user_change()
 RETURNS TRIGGER AS $$
 DECLARE
     target_clinic_id UUID;
-    target_role TEXT;
-    target_full_name TEXT;
+    invite_exists BOOLEAN;
 BEGIN
-    -- Only proceed if the user is completely verified and has genuinely authenticated
-    -- Supabase generateLink natively bypasses email_confirmed_at flags automatically in some project settings.
-    -- To guarantee they only become an active user AFTER clicking the link, we must assert last_sign_in_at is populated!
-    IF NEW.email_confirmed_at IS NULL OR NEW.last_sign_in_at IS NULL THEN
+    -- We only act if this user has organically completed their login handshake
+    IF NEW.last_sign_in_at IS NULL THEN
         RETURN NEW;
     END IF;
 
@@ -278,42 +275,27 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    -- Check if user was invited
-    SELECT clinic_id, role, full_name INTO target_clinic_id, target_role, target_full_name
-    FROM public.invites 
-    WHERE email = NEW.email 
-    LIMIT 1;
-
-    IF target_clinic_id IS NOT NULL THEN
-        -- Link to existing clinic
-        INSERT INTO public.users (id, clinic_id, full_name, role, setup_complete)
-        VALUES (
-          NEW.id, 
-          target_clinic_id, 
-          COALESCE(NEW.raw_user_meta_data->>'full_name', target_full_name, 'New Member'), 
-          COALESCE(NEW.raw_user_meta_data->>'role', target_role),
-          TRUE -- If they confirmed, they are no longer "pending" in the invite sense
-        )
-        ON CONFLICT (id) DO NOTHING;
-        
-        -- Clean up invite
-        DELETE FROM public.invites WHERE email = NEW.email AND clinic_id = target_clinic_id;
-    ELSE
-        -- Create a NEW clinic for this new Administrator (Signup flow)
-        -- We only do this if they are not already in a clinic
-        INSERT INTO public.clinics (name) VALUES ('New Clinic')
-        RETURNING id INTO target_clinic_id;
-
-        INSERT INTO public.users (id, clinic_id, full_name, role, setup_complete)
-        VALUES (
-          NEW.id, 
-          target_clinic_id, 
-          COALESCE(NEW.raw_user_meta_data->>'full_name', 'Administrator'), 
-          'administrator',
-          TRUE
-        )
-        ON CONFLICT (id) DO NOTHING;
+    -- Is this new user an Invitee? If yes, gracefully do absolutely NO database manipulation!
+    -- The customized Flutter Edge Function securely and asynchronously handles migrating Invites.
+    SELECT EXISTS(SELECT 1 FROM public.invites WHERE email = NEW.email) INTO invite_exists;
+    IF invite_exists THEN
+        RETURN NEW;
     END IF;
+
+    -- If this is NOT an Invitee, it's an authentic external Administrator signing up manually.
+    -- Build their brand new standalone instance dynamically.
+    INSERT INTO public.clinics (name) VALUES ('New Clinic')
+    RETURNING id INTO target_clinic_id;
+
+    INSERT INTO public.users (id, clinic_id, full_name, role, setup_complete)
+    VALUES (
+      NEW.id, 
+      target_clinic_id, 
+      COALESCE(NEW.raw_user_meta_data->>'full_name', 'Administrator'), 
+      'administrator',
+      TRUE
+    )
+    ON CONFLICT (id) DO NOTHING;
     
     RETURN NEW;
 END;
