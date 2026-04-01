@@ -67,6 +67,7 @@ dependencies:
 
   # Links (email, phone, maps)
   url_launcher: ^6.3.1
+  flutter_colorpicker: ^1.1.0
 
   # -----------------------------------------------
   # Firebase (web platform + multi-user backend)

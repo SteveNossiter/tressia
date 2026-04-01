@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/project_module.dart';
 import '../../providers/app_state.dart';
+import '../../theme/organic_palette.dart';
 import '../multi_select_dropdown.dart';
 
 class EntityCreator extends ConsumerStatefulWidget {
@@ -67,17 +69,28 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
     }
   }
 
-  final List<Color> _palette = [
-    const Color(0xFF38BDF8),
-    Colors.blue,
-    Colors.red,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.teal,
-    Colors.pink,
-    Colors.amber,
-  ];
+  final List<Color> _palette = OrganicPalette.colors;
+
+  void _showColorPicker() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pick a color'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: _color,
+            onColorChanged: (c) => setState(() => _color = c),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            child: const Text('Got it'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _pickDate(bool isStart) async {
     DateTime first = DateTime(2020);
@@ -649,35 +662,59 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
-                    children: _palette
-                        .map(
-                          (c) => GestureDetector(
-                            onTap: () => setState(() => _color = c),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: c,
-                                shape: BoxShape.circle,
-                                border: _color == c
-                                    ? Border.all(
-                                        color: theme.colorScheme.onSurface,
-                                        width: 2,
+                    runSpacing: 8,
+                    children: [
+                      ..._palette.take(9).map(
+                            (c) => GestureDetector(
+                              onTap: () => setState(() => _color = c),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: c,
+                                  shape: BoxShape.circle,
+                                  border: _color.value == c.value
+                                      ? Border.all(
+                                          color: theme.colorScheme.onSurface,
+                                          width: 2,
+                                        )
+                                      : null,
+                                ),
+                                child: _color.value == c.value
+                                    ? const Icon(
+                                        Icons.check,
+                                        size: 16,
+                                        color: Colors.white,
                                       )
                                     : null,
                               ),
-                              child: _color == c
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 14,
-                                      color: Colors.white,
-                                    )
-                                  : null,
                             ),
                           ),
-                        )
-                        .toList(),
+                      // Custom color button
+                      GestureDetector(
+                        onTap: _showColorPicker,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: theme.dividerColor.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                            border: !_palette.any((pc) => pc.value == _color.value)
+                                ? Border.all(
+                                    color: theme.colorScheme.onSurface,
+                                    width: 2,
+                                  )
+                                : null,
+                          ),
+                          child: Icon(
+                            Icons.colorize,
+                            size: 16,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                 ],

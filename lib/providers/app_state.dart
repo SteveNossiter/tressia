@@ -145,6 +145,44 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
   }
 }
 
+// =============================================
+// INVITES
+// =============================================
+final invitesProvider = NotifierProvider<InvitesNotifier, List<UserInvite>>(
+  () => InvitesNotifier(),
+);
+
+class InvitesNotifier extends Notifier<List<UserInvite>> {
+  final _repo = SupabaseRepository();
+  StreamSubscription? _sub;
+
+  @override
+  List<UserInvite> build() {
+    final user = ref.watch(currentUserProvider);
+    _sub?.cancel();
+
+    if (user.clinicId.isNotEmpty) {
+      _sub = _repo.streamInvites(user.clinicId).listen((data) {
+        if (ref.read(currentUserProvider).clinicId == user.clinicId) {
+          state = data;
+        }
+      });
+    }
+
+    ref.onDispose(() => _sub?.cancel());
+    return [];
+  }
+
+  Future<void> cancelInvite(String id) async {
+    try {
+      await _repo.deleteInvite(id);
+    } catch (e) {
+      debugPrint('InvitesNotifier.cancelInvite Error: $e');
+      rethrow;
+    }
+  }
+}
+
 AppUser _mapToAppUser(Map<String, dynamic> data) {
   String name = data['full_name'] ?? 'Unknown User';
   List<String> parts = name.split(' ');

@@ -204,3 +204,24 @@ class ClinicSettings {
         weeklyReportHour: weeklyReportHour ?? this.weeklyReportHour,
       );
 }
+
+// =============================================
+// USER INVITE
+// =============================================
+class UserInvite {
+  final String id;
+  final String clinicId;
+  final String email;
+  final String role;
+  final String createdBy;
+  final DateTime createdAt;
+
+  UserInvite({
+    required this.id,
+    required this.clinicId,
+    required this.email,
+    required this.role,
+    required this.createdBy,
+    required this.createdAt,
+  });
+}

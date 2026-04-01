@@ -18,6 +18,7 @@ class UsersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final users = ref.watch(systemUsersProvider);
+    final invites = ref.watch(invitesProvider);
     final currentUser = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
 
@@ -36,10 +37,116 @@ class UsersScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: ListView.builder(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: users.length,
-        itemBuilder: (context, i) => _UserCard(user: users[i]),
+        children: [
+          ...users.map((u) => _UserCard(user: u)),
+          if (invites.isNotEmpty && currentUser.isAdmin) ...[
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                const Icon(Icons.mail_outline, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  'Pending Invitations (${invites.length})',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: theme.hintColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...invites.map((i) => _InviteCard(invite: i)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InviteCard extends ConsumerWidget {
+  final UserInvite invite;
+  const _InviteCard({required this.invite});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final role = UserRole.values.firstWhere(
+      (r) => r.name.toLowerCase() == invite.role.toLowerCase(),
+      orElse: () => UserRole.therapist,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.cardTheme.color?.withValues(alpha: 0.5) ??
+            theme.scaffoldBackgroundColor.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.1)),
+        dashArray: const [4, 4], // Just as a conceptual indicator of "pending"
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
+            child: const Icon(Icons.person_outline, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  invite.email,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  'Invited as ${invite.role} • ${DateFormat('d MMM').format(invite.createdAt)}',
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: theme.hintColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: 'Cancel Invite',
+            onPressed: () => _confirmCancel(context, ref),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmCancel(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Invitation?'),
+        content: Text('This will rescind the invite for ${invite.email}.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(invitesProvider.notifier).cancelInvite(invite.id);
+              Navigator.pop(ctx);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Rescind'),
+          ),
+        ],
       ),
     );
   }
@@ -337,10 +444,16 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       orElse: () => widget.user,
     );
     final projects = ref.watch(projectsProvider);
-    final currentClients = projects
-        .where((p) => p.assignedTherapistIds.contains(user.id))
-        .where((p) => !p.clientType.startsWith('Profile:'))
-        .toList();
+    final seenClientIds = <String>{};
+    final currentClients = <Project>[];
+    for (final p in projects) {
+      if (p.assignedTherapistIds.contains(user.id) && 
+          !p.clientType.startsWith('Profile:') &&
+          !seenClientIds.contains(p.clientId)) {
+        currentClients.add(p);
+        seenClientIds.add(p.clientId);
+      }
+    }
     final pastClients =
         <Project>[]; // Placeholder for when clients are archived
 

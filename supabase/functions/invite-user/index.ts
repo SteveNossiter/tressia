@@ -14,6 +14,7 @@ serve(async (req) => {
 
   try {
     const { email, role, clinicId } = await req.json()
+    console.log(`TRESSIA_DEBUG: Inviting ${email} as ${role} for clinic ${clinicId}`);
 
     // Create Admin Client (Uses service role to bypass RLS)
     const supabaseAdmin = createClient(
@@ -26,17 +27,23 @@ serve(async (req) => {
       data: { 
         role: role,
         clinic_id: clinicId
-      }
+      },
     })
 
-    if (error) throw error
+    if (error) {
+      console.error(`TRESSIA_DEBUG_ERROR: Failed to invite ${email}:`, error);
+      throw error;
+    }
+
+    console.log(`TRESSIA_DEBUG_SUCCESS: Invite sent to ${email}. ID: ${data.user.id}`);
 
     return new Response(JSON.stringify({ success: true, data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
 
-  } catch (error) {
+  } catch (error: any) {
+    console.error(`TRESSIA_DEBUG_CATCH: ${error.message}`);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,

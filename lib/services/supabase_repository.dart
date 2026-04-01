@@ -299,6 +299,32 @@ class SupabaseRepository {
   // ---------------------------------------------------------------------------
   // USERS & INVITES
   // ---------------------------------------------------------------------------
+  Stream<List<UserInvite>> streamInvites(String clinicId) {
+    return _client
+        .from('invites')
+        .stream(primaryKey: ['id'])
+        .eq('clinic_id', clinicId)
+        .map((dataList) => dataList.map(_mapInvite).toList());
+  }
+
+  UserInvite _mapInvite(Map<String, dynamic> data) => UserInvite(
+        id: data['id'],
+        clinicId: data['clinic_id'],
+        email: data['email'],
+        role: data['role'],
+        createdBy: data['created_by'] ?? '',
+        createdAt: DateTime.parse(data['created_at']),
+      );
+
+  Future<void> deleteInvite(String id) async {
+    try {
+      await _client.from('invites').delete().eq('id', id);
+    } catch (e) {
+      debugPrint('SupabaseRepository.deleteInvite Error: $e');
+      rethrow;
+    }
+  }
+
   Future<void> inviteUser(String email, String role, String clinicId) async {
     try {
       // 1. Log the invite in our database for the trigger to pick up later

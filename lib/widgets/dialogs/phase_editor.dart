@@ -1,10 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/project_module.dart';
 import '../../providers/app_state.dart';
 import '../../screens/client_profile_screen.dart';
+import '../../theme/organic_palette.dart';
 import 'task_editor.dart';
 import 'entity_creator.dart';
 import 'glass_dialog.dart';
@@ -33,6 +31,9 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
   late String _clientType;
   List<String> _assignedTherapistIds = [];
   late List<Contact> _contacts;
+  late Color _color;
+
+  final List<Color> _palette = OrganicPalette.colors;
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
     _clientType = p.clientType;
     _assignedTherapistIds = List.from(p.assignedTherapistIds);
     _contacts = List.from(p.contacts);
+    _color = p.color;
   }
 
   @override
@@ -86,6 +88,27 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
       });
   }
 
+  void _showColorPicker() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pick a color'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: _color,
+            onColorChanged: (c) => setState(() => _color = c),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            child: const Text('Got it'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _save() {
     final upd = widget.project.copyWith(
       title: _titleCtrl.text.isNotEmpty
@@ -103,6 +126,7 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
       clientType: _clientType,
       assignedTherapistIds: _assignedTherapistIds,
       contacts: _contacts,
+      color: _color,
     );
     ref.read(projectsProvider.notifier).updateProject(upd);
     setState(() => _isEditing = false);
@@ -349,6 +373,70 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
                             _endDate,
                             () => _pickDate(false),
                             theme,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Theme Colour',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: theme.hintColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ..._palette.take(9).map(
+                              (c) => GestureDetector(
+                                onTap: () => setState(() => _color = c),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                    border: _color.value == c.value
+                                        ? Border.all(
+                                            color: theme.colorScheme.onSurface,
+                                            width: 2,
+                                          )
+                                        : null,
+                                  ),
+                                  child: _color.value == c.value
+                                      ? const Icon(
+                                          Icons.check,
+                                          size: 16,
+                                          color: Colors.white,
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            ),
+                        GestureDetector(
+                          onTap: _showColorPicker,
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: theme.dividerColor.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                              border: !_palette.any((pc) => pc.value == _color.value)
+                                  ? Border.all(
+                                      color: theme.colorScheme.onSurface,
+                                      width: 2,
+                                    )
+                                  : null,
+                            ),
+                            child: Icon(
+                              Icons.colorize,
+                              size: 16,
+                              color: theme.colorScheme.onSurface,
+                            ),
                           ),
                         ),
                       ],

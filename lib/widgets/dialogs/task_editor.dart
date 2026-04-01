@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/project_module.dart';
 import '../../models/clinic_settings.dart';
 import '../../providers/app_state.dart';
+import '../../theme/organic_palette.dart';
 import 'subtask_editor.dart';
 import 'entity_creator.dart';
 import 'glass_dialog.dart';
@@ -26,19 +25,28 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
   late Color _color;
   List<String> _assignedUserIds = [];
 
-  final List<Color> _palette = [
-    const Color(0xFF38BDF8),
-    const Color(0xFF00B4D8),
-    const Color(0xFF10B981),
-    const Color(0xFFD4AF37),
-    const Color(0xFFF4A261),
-    const Color(0xFFE29578),
-    Colors.red,
-    Colors.purple,
-    Colors.teal,
-    Colors.pink,
-    Colors.amber,
-  ];
+  final List<Color> _palette = OrganicPalette.colors;
+
+  void _showColorPicker() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pick a color'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: _color,
+            onColorChanged: (c) => setState(() => _color = c),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            child: const Text('Got it'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -278,35 +286,57 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: _palette
-                          .map(
-                            (c) => GestureDetector(
-                              onTap: () => setState(() => _color = c),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: c,
-                                  shape: BoxShape.circle,
-                                  border: _color.value == c.value
-                                      ? Border.all(
-                                          color: theme.colorScheme.onSurface,
-                                          width: 2,
+                      children: [
+                        ..._palette.take(9).map(
+                              (c) => GestureDetector(
+                                onTap: () => setState(() => _color = c),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: c,
+                                    shape: BoxShape.circle,
+                                    border: _color.value == c.value
+                                        ? Border.all(
+                                            color: theme.colorScheme.onSurface,
+                                            width: 2,
+                                          )
+                                        : null,
+                                  ),
+                                  child: _color.value == c.value
+                                      ? const Icon(
+                                          Icons.check,
+                                          size: 16,
+                                          color: Colors.white,
                                         )
                                       : null,
                                 ),
-                                child: _color.value == c.value
-                                    ? const Icon(
-                                        Icons.check,
-                                        size: 16,
-                                        color: Colors.white,
-                                      )
-                                    : null,
                               ),
                             ),
-                          )
-                          .toList(),
+                        GestureDetector(
+                          onTap: _showColorPicker,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: theme.dividerColor.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                              border: !_palette.any((pc) => pc.value == _color.value)
+                                  ? Border.all(
+                                      color: theme.colorScheme.onSurface,
+                                      width: 2,
+                                    )
+                                  : null,
+                            ),
+                            child: Icon(
+                              Icons.colorize,
+                              size: 16,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     if (isAdmin || currentUser.isSuperAdmin)
