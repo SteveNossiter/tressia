@@ -350,7 +350,7 @@ class _UserCard extends ConsumerWidget {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('YES, DESTROY USER'),
+            child: const Text('Delete User'),
           ),
         ],
       ),

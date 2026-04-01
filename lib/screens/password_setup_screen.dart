@@ -31,15 +31,27 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
     });
 
     try {
-      // Securely update the user's password and clear the setup flag
+      // 1. First properly confirm password change natively with Supabase Auth
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(
           password: _passwordController.text,
           data: {'needs_password_setup': false},
         ),
       );
+
+      // 2. Safely trigger Edge Function to process invite -> user transfer securely across servers!
+      final String jwt = Supabase.instance.client.auth.currentSession?.accessToken ?? '';
+      final res = await Supabase.instance.client.functions.invoke(
+        'accept-invite',
+        headers: {'Authorization': 'Bearer $jwt'},
+      );
+
+      if (res.status != 200) {
+        throw Exception('Failed to migrate invite credentials: ${res.data}');
+      }
+
     } catch (e) {
-      setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
+      if (mounted) setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
