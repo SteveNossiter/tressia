@@ -10,6 +10,7 @@ import '../models/project_module.dart';
 import '../providers/app_state.dart';
 import '../widgets/dialogs/glass_dialog.dart';
 import '../widgets/dialogs/user_creator.dart';
+import '../services/supabase_repository.dart';
 import 'client_profile_screen.dart';
 
 class UsersScreen extends ConsumerWidget {
@@ -352,7 +353,6 @@ class _UserCard extends ConsumerWidget {
       }
     }
   }
-}
 
   Color _roleColor(UserRole r) {
     switch (r) {
