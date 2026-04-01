@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 import '../models/project_module.dart';
+import '../models/clinic_settings.dart';
 
 class SupabaseRepository {
   final SupabaseClient _client = Supabase.instance.client;

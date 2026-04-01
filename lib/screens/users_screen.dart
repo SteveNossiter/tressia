@@ -85,8 +85,7 @@ class _InviteCard extends ConsumerWidget {
         color: theme.cardTheme.color?.withValues(alpha: 0.5) ??
             theme.scaffoldBackgroundColor.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.1)),
-        dashArray: const [4, 4], // Just as a conceptual indicator of "pending"
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.7)),
       ),
       child: Row(
         children: [
