@@ -129,6 +129,8 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
         clinicId: currentUser.clinicId,
         fullName: u.name,
       );
+      // Force refresh of pending invites to instantly display the link
+      ref.invalidate(invitesProvider);
     } catch (e) {
       debugPrint('SystemUsersNotifier.addUser Error: $e');
       rethrow;
