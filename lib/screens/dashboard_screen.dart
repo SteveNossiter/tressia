@@ -225,7 +225,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           matchesStatus;
     }).toList();
 
-    if (_isFullscreenGantt) {
+    bool isLandscapePhone = MediaQuery.of(context).orientation == Orientation.landscape && MediaQuery.of(context).size.height < 600;
+    if (_isFullscreenGantt || isLandscapePhone) {
       return Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -247,13 +248,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildGanttHeader(theme, true),
               const SizedBox(height: 16),
               Expanded(
-                child: SingleChildScrollView(
-                  child: _buildGanttChart(
-                    context,
-                    filteredProjects,
-                    filteredTasks,
-                    filteredSubtasks,
-                  ),
+                child: _buildGanttChart(
+                  context,
+                  filteredProjects,
+                  filteredTasks,
+                  filteredSubtasks,
                 ),
               ),
             ],
@@ -810,7 +809,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: ganttContent,
             );
           } else {
-            return Expanded(child: ganttContent); // Fill space in fullscreen
+            return ganttContent; // It is already inside an Expanded in the parent!
           }
         },
       ),
@@ -830,7 +829,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (availableWidth <= 0 || availableWidth.isInfinite || availableWidth.isNaN) {
       availableWidth = 1000;
     }
-    const double labelWidth = 150;
+    double labelWidth = availableWidth < 600 ? 80 : 150;
     double timelineWidth = (availableWidth - labelWidth).clamp(400.0, double.infinity);
 
     int totalUnits = 1;
@@ -869,34 +868,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         String label = h == 0 ? '12am' : h < 12 ? '${h}am' : h == 12 ? '12pm' : '${h - 12}pm';
         headerWidgets.add(_buildHeaderCell(label, isNow, unitWidth, theme));
       }
+    
     } else if (scale == GanttScale.week) {
-      totalUnits = 7;
-      unitWidth = (timelineWidth / totalUnits).clamp(60.0, double.infinity);
+      int offsetWeeks = 4;
+      totalUnits = 7 * (offsetWeeks * 2 + 1); // 9 weeks total
+      unitWidth = (timelineWidth / 7).clamp(60.0, double.infinity);
       int weekday = _ganttAnchorDate.weekday;
-      startAnchor = _ganttAnchorDate.subtract(Duration(days: weekday - 1));
+      startAnchor = _ganttAnchorDate.subtract(Duration(days: weekday - 1 + (offsetWeeks * 7)));
       startAnchor = DateTime(startAnchor.year, startAnchor.month, startAnchor.day);
       final now = DateTime.now();
-      if (now.isAfter(startAnchor) && now.isBefore(startAnchor.add(const Duration(days: 7)))) {
+      if (now.isAfter(startAnchor) && now.isBefore(startAnchor.add(Duration(days: totalUnits)))) {
         currentPos = (now.difference(startAnchor).inMinutes / (24 * 60.0)) * unitWidth;
       }
       final List<String> days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      for (int i = 0; i < 7; i++) {
+      for (int i = 0; i < totalUnits; i++) {
         DateTime dayDate = startAnchor.add(Duration(days: i));
         bool isNow = dayDate.year == now.year && dayDate.month == now.month && dayDate.day == now.day;
-        headerWidgets.add(_buildHeaderCell('${days[i]} ${dayDate.day}', isNow, unitWidth, theme));
+        String dayName = days[dayDate.weekday - 1];
+        headerWidgets.add(_buildHeaderCell('${dayName} ${dayDate.day}', isNow, unitWidth, theme));
       }
+    
     } else if (scale == GanttScale.month) {
-      int daysInMonth = DateTime(_ganttAnchorDate.year, _ganttAnchorDate.month + 1, 0).day;
-      totalUnits = daysInMonth;
-      unitWidth = (timelineWidth / totalUnits).clamp(30.0, double.infinity);
-      startAnchor = DateTime(_ganttAnchorDate.year, _ganttAnchorDate.month, 1);
+      int offsetMonths = 3;
+      int numMonths = offsetMonths * 2 + 1;
+      
+      startAnchor = DateTime(_ganttAnchorDate.year, _ganttAnchorDate.month - offsetMonths, 1);
+      int totalDays = 0;
+      for (int m = 0; m < numMonths; m++) {
+        totalDays += DateTime(startAnchor.year, startAnchor.month + m + 1, 0).day;
+      }
+      totalUnits = totalDays;
+      unitWidth = (timelineWidth / 30).clamp(30.0, double.infinity); 
+      
       final now = DateTime.now();
-      if (now.year == _ganttAnchorDate.year && now.month == _ganttAnchorDate.month) {
-        currentPos = (now.day - 1 + (now.hour / 24.0)) * unitWidth;
+      if (now.isAfter(startAnchor) && now.isBefore(startAnchor.add(Duration(days: totalUnits)))) {
+        currentPos = (now.difference(startAnchor).inMinutes / (24 * 60.0)) * unitWidth;
       }
       for (int i = 0; i < totalUnits; i++) {
-        bool isNow = now.year == startAnchor.year && now.month == startAnchor.month && now.day == (i + 1);
-        headerWidgets.add(_buildHeaderCell('${i + 1}', isNow, unitWidth, theme));
+        DateTime d = startAnchor.add(Duration(days: i));
+        bool isNow = now.year == d.year && now.month == d.month && now.day == d.day;
+        headerWidgets.add(_buildHeaderCell('${d.day}', isNow, unitWidth, theme));
       }
     } else if (scale == GanttScale.year) {
       totalUnits = 12;
@@ -1008,7 +1019,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Stack(
                     children: [
                       // Vertical Guide Lines
-                      Row(
+                      Positioned.fill(
+                      child: Row(
                         children: List.generate(totalUnits, (i) {
                           bool isBolder = false;
                           if (scale == GanttScale.month && (i % 7 == 0 || i == 0)) isBolder = true;
@@ -1027,6 +1039,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           );
                         }),
                       ),
+                    ),
                       // Gantt Rows and Headers
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1171,10 +1184,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   border: isPhase ? Border.symmetric(vertical: BorderSide(color: color, width: 3), horizontal: BorderSide(color: color, width: 1.5)) : null,
                   boxShadow: (isProminent && !isPhase) ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 3))] : null,
                 ),
-                child: (!isPhase && isProminent) ? Padding(
+                child: (!isPhase && isProminent) ? Transform.translate(
+                  offset: Offset(extendsLeft || width < 60 ? -120 : 0, 0),
+                  child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Align(
-                    alignment: extendsLeft ? Alignment.centerRight : Alignment.centerLeft,
+                    alignment: extendsLeft || width < 60 ? Alignment.centerRight : Alignment.centerLeft,
                     child: Text(
                       title,
                       maxLines: 1,
@@ -1183,6 +1198,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         fontSize: isTask ? 10 : 8,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
+                      ),
                       ),
                     ),
                   ),
