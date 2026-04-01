@@ -266,8 +266,10 @@ DECLARE
     target_role TEXT;
     target_full_name TEXT;
 BEGIN
-    -- Only proceed if the user is confirmed (new signup or confirmed invitee)
-    IF NEW.email_confirmed_at IS NULL THEN
+    -- Only proceed if the user is completely verified and has genuinely authenticated
+    -- Supabase generateLink natively bypasses email_confirmed_at flags automatically in some project settings.
+    -- To guarantee they only become an active user AFTER clicking the link, we must assert last_sign_in_at is populated!
+    IF NEW.email_confirmed_at IS NULL OR NEW.last_sign_in_at IS NULL THEN
         RETURN NEW;
     END IF;
 
@@ -325,5 +327,5 @@ CREATE TRIGGER on_auth_user_created
 
 DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
 CREATE TRIGGER on_auth_user_updated
-  AFTER UPDATE OF email_confirmed_at ON auth.users
+  AFTER UPDATE OF email_confirmed_at, last_sign_in_at ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_auth_user_change();
