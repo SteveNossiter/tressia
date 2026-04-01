@@ -314,6 +314,7 @@ class SupabaseRepository {
         email: data['email'],
         role: data['role'],
         fullName: data['full_name'] ?? 'New Member',
+        actionLink: data['action_link'],
         createdBy: data['created_by'] ?? '',
         createdAt: DateTime.parse(data['created_at']),
       );

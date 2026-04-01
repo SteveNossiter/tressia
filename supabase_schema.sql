@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.invites (
     email TEXT NOT NULL,
     role TEXT NOT NULL,
     full_name TEXT DEFAULT 'New Member',
+    action_link TEXT,
     created_by UUID REFERENCES public.users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(clinic_id, email)

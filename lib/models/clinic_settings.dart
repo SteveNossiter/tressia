@@ -214,6 +214,7 @@ class UserInvite {
   final String email;
   final String role;
   final String fullName;
+  final String? actionLink;
   final String createdBy;
   final DateTime createdAt;
 
@@ -223,6 +224,7 @@ class UserInvite {
     required this.email,
     required this.role,
     required this.fullName,
+    this.actionLink,
     required this.createdBy,
     required this.createdAt,
   });

@@ -22,23 +22,36 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Trigger the official Supabase Auth Invitation
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      data: { 
-        role: role,
-        clinic_id: clinicId,
-        full_name: fullName
-      },
-    })
+    // Generate the invite link directly (bypassing native email delivery)
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'invite',
+      email: email,
+      options: {
+        redirectTo: 'https://tressia.pages.dev/',
+        data: { 
+          role: role,
+          clinic_id: clinicId,
+          full_name: fullName
+        }
+      }
+    });
 
-    if (error) {
-      console.error(`TRESSIA_DEBUG_ERROR: Failed to invite ${email}:`, error);
-      throw error;
+    if (linkError) {
+      console.error(`TRESSIA_DEBUG_ERROR: Failed to generate link for ${email}:`, linkError);
+      throw linkError;
     }
 
-    console.log(`TRESSIA_DEBUG_SUCCESS: Invite sent to ${email}. ID: ${data.user.id}`);
+    const actionLink = linkData.properties?.action_link;
+    console.log(`TRESSIA_DEBUG_SUCCESS: Invite link generated for ${email}. ID: ${linkData.user.id}`);
 
-    return new Response(JSON.stringify({ success: true, data }), {
+    // Update the public.invites table securely via service role
+    await supabaseAdmin
+      .from('invites')
+      .update({ action_link: actionLink })
+      .eq('email', email)
+      .eq('clinic_id', clinicId);
+
+    return new Response(JSON.stringify({ success: true, action_link: actionLink, data: linkData }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })

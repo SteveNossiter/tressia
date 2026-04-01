@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -125,6 +126,17 @@ class _InviteCard extends ConsumerWidget {
               ],
             ),
           ),
+          if (invite.actionLink != null && invite.actionLink!.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.copy, size: 18, color: Colors.blue),
+              tooltip: 'Copy Invite Link',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: invite.actionLink!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invite link copied to clipboard!')),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.close, size: 18),
             tooltip: 'Cancel Invite',
