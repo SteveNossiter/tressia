@@ -31,7 +31,8 @@ serve(async (req) => {
         data: { 
           role: role,
           clinic_id: clinicId,
-          full_name: fullName
+          full_name: fullName,
+          needs_password_setup: true
         }
       }
     });

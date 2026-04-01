@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'providers/app_state.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
+import 'screens/password_setup_screen.dart';
 import 'screens/clinic_setup_screen.dart';
 import 'services/encryption_service.dart';
 
@@ -81,6 +82,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
               Supabase.instance.client.auth.currentUser;
 
           if (session != null && user?.emailConfirmedAt != null) {
+            final needsPasswordSetup = user?.userMetadata?['needs_password_setup'] == true;
+            if (needsPasswordSetup) {
+              return const PasswordSetupScreen();
+            }
             return const SetupGate(child: HomeScreen());
           }
           return const AuthScreen();
