@@ -340,8 +340,8 @@ class _UserCard extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete ${user.displayName}?', style: const TextStyle(color: Colors.red)),
-        content: const Text('This will permanently remove this user from the clinic. This action cannot be undone. Are you absolutely sure?'),
+        title: Text('WARNING: Delete ${user.displayName}?', style: const TextStyle(color: Colors.red)),
+        content: const Text('You are about to PERMANENTLY WIPE this user from the entire database systems.\n\nThey will lose all secure access to Tressia. This action absolutely CANNOT be undone. Are you certain?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -350,18 +350,39 @@ class _UserCard extends ConsumerWidget {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('DELETE USER'),
+            child: const Text('YES, DESTROY USER'),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await ref.read(systemUsersProvider.notifier).removeUser(user.id);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('User ${user.displayName} removed')),
-        );
+      if (!context.mounted) return;
+      
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Permanently deleting ${user.displayName}...'), duration: const Duration(days: 1)),
+      );
+      
+      try {
+        await ref.read(systemUsersProvider.notifier).removeUser(user.id);
+        
+        // Force immediate UI refresh to instantly hide the deleted user
+        ref.invalidate(systemUsersProvider);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('User ${user.displayName} has been permanently erased.'), backgroundColor: Colors.green),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
+          );
+        }
       }
     }
   }

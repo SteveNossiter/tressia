@@ -389,12 +389,19 @@ class SupabaseRepository {
 
   Future<void> deleteUser(String id) async {
     try {
-      // 1. Delete from public.users (triggers might handle this, but let's be explicit)
+      // 1. Permanently delete from core auth.users via secure Edge Function (bypassing RLS client restrictions)
+      final res = await _client.functions.invoke(
+        'delete-user',
+        body: {'userId': id},
+      );
+
+      if (res.status != 200) {
+        throw Exception('Failed to delete user natively: ${res.data}');
+      }
+      
+      // 2. Clean up local public.users just in case auth triggers are delayed
       await _client.from('users').delete().eq('id', id);
       
-      // 2. Note: Deleting from auth.users requires service role, 
-      // so for now we just delete the public record which blocks login via RLS 
-      // if properly configured. To actually delete the auth account, use an admin Edge Function.
     } catch (e) {
       debugPrint('SupabaseRepository.deleteUser Error: $e');
       rethrow;
