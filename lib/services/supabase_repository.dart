@@ -301,12 +301,29 @@ class SupabaseRepository {
   // ---------------------------------------------------------------------------
   Future<void> inviteUser(String email, String role, String clinicId) async {
     try {
+      // 1. Log the invite in our database for the trigger to pick up later
       await _client.from('invites').upsert({
         'clinic_id': clinicId,
         'email': email,
         'role': role,
         'created_by': _client.auth.currentUser?.id,
       });
+
+      // 2. Trigger the Edge Function to send the actual Auth email
+      // Note: This requires the 'invite-user' function to be deployed to Supabase
+      try {
+        await _client.functions.invoke(
+          'invite-user',
+          body: {
+            'email': email,
+            'role': role,
+            'clinicId': clinicId,
+          },
+        );
+      } catch (fError) {
+        // We log but don't fail, as the database entry is the source of truth
+        debugPrint('Invite Email Function Warning: $fError');
+      }
     } catch (e) {
       debugPrint('SupabaseRepository.inviteUser Error: $e');
       rethrow;
