@@ -49,11 +49,12 @@ CREATE TABLE public.users (
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 -- 2. INVITES
-CREATE TABLE public.invites (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+CREATE TABLE IF NOT EXISTS public.invites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     clinic_id UUID REFERENCES public.clinics(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
     role TEXT NOT NULL,
+    full_name TEXT DEFAULT 'New Member',
     created_by UUID REFERENCES public.users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(clinic_id, email)
@@ -190,22 +191,55 @@ USING (clinic_id = public.get_my_clinic_id());
 CREATE POLICY "Users can update own record" ON public.users FOR UPDATE 
 USING (id = auth.uid());
 
--- Projects, Tasks, Subtasks, Sessions, Invites: Filter by clinic_id
+-- Projects: Filter by clinic_id AND assigned_therapist_ids (for therapists)
+DROP POLICY IF EXISTS "Clinic isolation for projects" ON public.projects;
 CREATE POLICY "Clinic isolation for projects" ON public.projects FOR ALL 
-USING (clinic_id = public.get_my_clinic_id());
+USING (
+  clinic_id = public.get_my_clinic_id() 
+  AND (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('admin', 'administrator', 'receptionist')
+    OR auth.uid()::text = ANY(assigned_therapist_ids)
+  )
+);
 
+-- Tasks: Restricted to projects the user can see
+DROP POLICY IF EXISTS "Clinic isolation for tasks" ON public.tasks;
 CREATE POLICY "Clinic isolation for tasks" ON public.tasks FOR ALL 
-USING (clinic_id = public.get_my_clinic_id());
+USING (
+  clinic_id = public.get_my_clinic_id()
+  AND (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('admin', 'administrator', 'receptionist')
+    OR project_id IN (SELECT id FROM public.projects)
+  )
+);
 
+-- Subtasks: Restricted to tasks the user can see
+DROP POLICY IF EXISTS "Clinic isolation for subtasks" ON public.subtasks;
 CREATE POLICY "Clinic isolation for subtasks" ON public.subtasks FOR ALL 
-USING (clinic_id = public.get_my_clinic_id());
+USING (
+  clinic_id = public.get_my_clinic_id()
+  AND (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('admin', 'administrator', 'receptionist')
+    OR task_id IN (SELECT id FROM public.tasks)
+  )
+);
 
+-- Sessions: Restricted to projects the user can see
+DROP POLICY IF EXISTS "Clinic isolation for sessions" ON public.sessions;
 CREATE POLICY "Clinic isolation for sessions" ON public.sessions FOR ALL 
-USING (clinic_id = public.get_my_clinic_id());
+USING (
+  clinic_id = public.get_my_clinic_id()
+  AND (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('admin', 'administrator', 'receptionist')
+    OR project_id IN (SELECT id FROM public.projects)
+  )
+);
 
+DROP POLICY IF EXISTS "Clinic isolation for invites" ON public.invites;
 CREATE POLICY "Clinic isolation for invites" ON public.invites FOR ALL 
 USING (clinic_id = public.get_my_clinic_id());
 
+DROP POLICY IF EXISTS "Clinic isolation for assignment_requests" ON public.assignment_requests;
 CREATE POLICY "Clinic isolation for assignment_requests" ON public.assignment_requests FOR ALL 
 USING (clinic_id = public.get_my_clinic_id());
 
@@ -223,39 +257,72 @@ CREATE TRIGGER update_tasks_modtime BEFORE UPDATE ON public.tasks FOR EACH ROW E
 CREATE TRIGGER update_subtasks_modtime BEFORE UPDATE ON public.subtasks FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 CREATE TRIGGER update_sessions_modtime BEFORE UPDATE ON public.sessions FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 
--- TRIGGER FOR NEW USER SIGNUP --
-CREATE OR REPLACE FUNCTION public.handle_new_user() 
+-- TRIGGER FOR NEW USER SIGNUP / RE-INVITE --
+CREATE OR REPLACE FUNCTION public.handle_auth_user_change() 
 RETURNS TRIGGER AS $$
 DECLARE
     target_clinic_id UUID;
     target_role TEXT;
+    target_full_name TEXT;
 BEGIN
+    -- Only proceed if the user is confirmed (new signup or confirmed invitee)
+    IF NEW.email_confirmed_at IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    -- Check if user already exists in public.users to avoid double entry
+    IF EXISTS (SELECT 1 FROM public.users WHERE id = NEW.id) THEN
+        RETURN NEW;
+    END IF;
+
     -- Check if user was invited
-    SELECT clinic_id, role INTO target_clinic_id, target_role 
+    SELECT clinic_id, role, full_name INTO target_clinic_id, target_role, target_full_name
     FROM public.invites 
     WHERE email = NEW.email 
     LIMIT 1;
 
     IF target_clinic_id IS NOT NULL THEN
         -- Link to existing clinic
-        INSERT INTO public.users (id, clinic_id, full_name, role)
-        VALUES (NEW.id, target_clinic_id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'New Member'), target_role);
+        INSERT INTO public.users (id, clinic_id, full_name, role, setup_complete)
+        VALUES (
+          NEW.id, 
+          target_clinic_id, 
+          COALESCE(NEW.raw_user_meta_data->>'full_name', target_full_name, 'New Member'), 
+          COALESCE(NEW.raw_user_meta_data->>'role', target_role),
+          TRUE -- If they confirmed, they are no longer "pending" in the invite sense
+        )
+        ON CONFLICT (id) DO NOTHING;
         
         -- Clean up invite
         DELETE FROM public.invites WHERE email = NEW.email AND clinic_id = target_clinic_id;
     ELSE
-        -- Create a NEW clinic for this new Administrator
+        -- Create a NEW clinic for this new Administrator (Signup flow)
+        -- We only do this if they are not already in a clinic
         INSERT INTO public.clinics (name) VALUES ('New Clinic')
         RETURNING id INTO target_clinic_id;
 
-        INSERT INTO public.users (id, clinic_id, full_name, role)
-        VALUES (NEW.id, target_clinic_id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'New Admin'), 'Administrator');
+        INSERT INTO public.users (id, clinic_id, full_name, role, setup_complete)
+        VALUES (
+          NEW.id, 
+          target_clinic_id, 
+          COALESCE(NEW.raw_user_meta_data->>'full_name', 'Administrator'), 
+          'administrator',
+          TRUE
+        )
+        ON CONFLICT (id) DO NOTHING;
     END IF;
-
+    
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Re-attach triggers for both Insert (signups) and Update (confirmations)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_auth_user_change();
+
+DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
+CREATE TRIGGER on_auth_user_updated
+  AFTER UPDATE OF email_confirmed_at ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_auth_user_change();

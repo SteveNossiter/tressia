@@ -213,6 +213,7 @@ class UserInvite {
   final String clinicId;
   final String email;
   final String role;
+  final String fullName;
   final String createdBy;
   final DateTime createdAt;
 
@@ -221,6 +222,7 @@ class UserInvite {
     required this.clinicId,
     required this.email,
     required this.role,
+    required this.fullName,
     required this.createdBy,
     required this.createdAt,
   });

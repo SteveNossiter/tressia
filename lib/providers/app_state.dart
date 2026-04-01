@@ -123,7 +123,12 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
     final currentUser = ref.read(currentUserProvider);
     if (currentUser.clinicId.isEmpty) return;
     try {
-      await _repo.inviteUser(u.email, u.role.name, currentUser.clinicId);
+      await _repo.inviteUser(
+        email: u.email,
+        role: u.role.name,
+        clinicId: currentUser.clinicId,
+        fullName: u.name,
+      );
     } catch (e) {
       debugPrint('SystemUsersNotifier.addUser Error: $e');
       rethrow;

@@ -100,17 +100,25 @@ class _InviteCard extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  invite.email,
+                  invite.fullName,
                   style: GoogleFonts.outfit(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
                 ),
                 Text(
-                  'Invited as ${invite.role} • ${DateFormat('d MMM').format(invite.createdAt)}',
+                  '${invite.email} • Invited as ${invite.role.toUpperCase()}',
                   style: GoogleFonts.outfit(
                     fontSize: 11,
                     color: theme.hintColor,
+                  ),
+                ),
+                Text(
+                  'Sent ${DateFormat('d MMM yyyy').format(invite.createdAt)}',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    color: theme.hintColor,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
               ],
@@ -217,71 +225,133 @@ class _UserCard extends ConsumerWidget {
                         )
                       : null,
                 ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName,
-                      style: GoogleFonts.outfit(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _roleColor(user.role).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            user.role.name.toUpperCase(),
-                            style: GoogleFonts.outfit(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: _roleColor(user.role),
-                            ),
-                          ),
-                        ),
-                        if (user.ahpraNumber.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            'AHPRA: ${user.ahpraNumber}',
-                            style: GoogleFonts.outfit(
-                              fontSize: 10,
-                              color: theme.hintColor,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (currentClients.isNotEmpty) ...[
-                      const SizedBox(height: 6),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        '${currentClients.length} active client${currentClients.length != 1 ? 's' : ''}',
+                        user.displayName,
                         style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          color: theme.hintColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _roleColor(user.role).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              user.role.name.toUpperCase(),
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: _roleColor(user.role),
+                              ),
+                            ),
+                          ),
+                          if (user.ahpraNumber.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              'AHPRA: ${user.ahpraNumber}',
+                              style: GoogleFonts.outfit(
+                                fontSize: 10,
+                                color: theme.hintColor,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (currentClients.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          '${currentClients.length} active client${currentClients.length != 1 ? 's' : ''}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: theme.hintColor,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const Icon(Icons.arrow_forward_ios, size: 14),
-            ],
+                if (currentUser.isAdmin && currentUser.id != user.id)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, color: theme.colorScheme.error, size: 20),
+                    onPressed: () => _confirmDelete(context, ref),
+                  )
+                else
+                  const Icon(Icons.arrow_forward_ios, size: 14),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-);
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final theme = Theme.of(context);
+    final repo = SupabaseRepository();
+    
+    // Check dependencies
+    final hasDeps = await repo.hasUserDependencies(user.id);
+    
+    if (!context.mounted) return;
+
+    if (hasDeps) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cannot Delete User'),
+          content: Text('${user.displayName} still has clients or tasks attributed to them. Please re-assign these before deleting.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Got it'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete ${user.displayName}?', style: const TextStyle(color: Colors.red)),
+        content: const Text('This will permanently remove this user from the clinic. This action cannot be undone. Are you absolutely sure?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('DELETE USER'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ref.read(systemUsersProvider.notifier).removeUser(user.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('User ${user.displayName} removed')),
+        );
+      }
+    }
+  }
 }
 
   Color _roleColor(UserRole r) {

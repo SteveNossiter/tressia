@@ -313,6 +313,7 @@ class SupabaseRepository {
         clinicId: data['clinic_id'],
         email: data['email'],
         role: data['role'],
+        fullName: data['full_name'] ?? 'New Member',
         createdBy: data['created_by'] ?? '',
         createdAt: DateTime.parse(data['created_at']),
       );
@@ -326,18 +327,23 @@ class SupabaseRepository {
     }
   }
 
-  Future<void> inviteUser(String email, String role, String clinicId) async {
+  Future<void> inviteUser({
+    required String email,
+    required String role,
+    required String clinicId,
+    required String fullName,
+  }) async {
     try {
       // 1. Log the invite in our database for the trigger to pick up later
       await _client.from('invites').upsert({
         'clinic_id': clinicId,
         'email': email,
         'role': role,
+        'full_name': fullName,
         'created_by': _client.auth.currentUser?.id,
       });
 
       // 2. Trigger the Edge Function to send the actual Auth email
-      // Note: This requires the 'invite-user' function to be deployed to Supabase
       try {
         await _client.functions.invoke(
           'invite-user',
@@ -345,10 +351,10 @@ class SupabaseRepository {
             'email': email,
             'role': role,
             'clinicId': clinicId,
+            'fullName': fullName,
           },
         );
       } catch (fError) {
-        // We log but don't fail, as the database entry is the source of truth
         debugPrint('Invite Email Function Warning: $fError');
       }
     } catch (e) {
@@ -357,9 +363,37 @@ class SupabaseRepository {
     }
   }
 
+  Future<bool> hasUserDependencies(String userId) async {
+    try {
+      final projects = await _client
+          .from('projects')
+          .select('id')
+          .contains('assigned_therapist_ids', [userId])
+          .limit(1);
+      if (projects.isNotEmpty) return true;
+
+      final tasks = await _client
+          .from('tasks')
+          .select('id')
+          .contains('assigned_user_ids', [userId])
+          .limit(1);
+      if (tasks.isNotEmpty) return true;
+
+      return false;
+    } catch (e) {
+      debugPrint('SupabaseRepository.hasUserDependencies Error: $e');
+      return true; // Prefer blocking deletion on error
+    }
+  }
+
   Future<void> deleteUser(String id) async {
     try {
+      // 1. Delete from public.users (triggers might handle this, but let's be explicit)
       await _client.from('users').delete().eq('id', id);
+      
+      // 2. Note: Deleting from auth.users requires service role, 
+      // so for now we just delete the public record which blocks login via RLS 
+      // if properly configured. To actually delete the auth account, use an admin Edge Function.
     } catch (e) {
       debugPrint('SupabaseRepository.deleteUser Error: $e');
       rethrow;

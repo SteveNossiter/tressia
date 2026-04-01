@@ -13,8 +13,8 @@ serve(async (req) => {
   }
 
   try {
-    const { email, role, clinicId } = await req.json()
-    console.log(`TRESSIA_DEBUG: Inviting ${email} as ${role} for clinic ${clinicId}`);
+    const { email, role, clinicId, fullName } = await req.json()
+    console.log(`TRESSIA_DEBUG: Inviting ${fullName} (${email}) as ${role} for clinic ${clinicId}`);
 
     // Create Admin Client (Uses service role to bypass RLS)
     const supabaseAdmin = createClient(
@@ -26,7 +26,8 @@ serve(async (req) => {
     const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { 
         role: role,
-        clinic_id: clinicId
+        clinic_id: clinicId,
+        full_name: fullName
       },
     })
 
