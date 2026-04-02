@@ -76,12 +76,13 @@ serve(async (req) => {
 
       if (!resendResponse.ok) {
         const resendErr = await resendResponse.text();
-        console.error(`TRESSIA_DEBUG_ERROR: Resend API failed: ${resendErr}`);
+        console.error(`TRESSIA_DEBUG_ERROR: Resend API failed with status ${resendResponse.status}: ${resendErr}`);
       } else {
-        console.log(`TRESSIA_DEBUG_SUCCESS: Email sent via Resend API to ${email}`);
+        const resendData = await resendResponse.json();
+        console.log(`TRESSIA_DEBUG_SUCCESS: Email ID ${resendData.id} sent via Resend API to ${email}`);
       }
     } else {
-      console.warn(`TRESSIA_DEBUG_WARNING: No RESEND_API_KEY found. Skipping email delivery.`);
+      console.warn(`TRESSIA_DEBUG_WARNING: No RESEND_API_KEY found in Edge Function Environment. Skipping email delivery.`);
     }
 
     // 4. Update the public.invites table securely

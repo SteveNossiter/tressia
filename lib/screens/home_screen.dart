@@ -59,39 +59,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         elevation: 0,
         title: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    theme.primaryColor,
-                    theme.colorScheme.secondary.withValues(alpha: 0.8),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.primaryColor.withValues(alpha: 0.25),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
+            Image.asset(
+              'assets/tressia_logo.png',
+              height: 38,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: theme.primaryColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.cottage, size: 20, color: Colors.white),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Tressia',
+                    style: GoogleFonts.lora(fontWeight: FontWeight.w600, fontSize: 18),
                   ),
                 ],
-              ),
-              child: const Icon(
-                Icons.apartment_rounded,
-                size: 20,
-                color: Colors.white,
-              ),
-            ),
-            Text(
-              'Tressia',
-              style: GoogleFonts.lora(
-                fontWeight: FontWeight.w600,
-                fontSize: 19,
-                letterSpacing: 0.3,
               ),
             ),
             const SizedBox(width: 12),

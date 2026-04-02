@@ -138,13 +138,19 @@ class _InviteCard extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.blue,
+                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: invite.actionLink!));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Invite link copied to clipboard!')),
                         );
                       },
-                      icon: const Icon(Icons.link, size: 14),
+                      icon: const Icon(Icons.copy, size: 14),
                       label: Text(
                         'COPY INVITE LINK',
                         style: GoogleFonts.outfit(
@@ -152,12 +158,6 @@ class _InviteCard extends ConsumerWidget {
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.5,
                         ),
-                      ),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.blue,
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
                   ),

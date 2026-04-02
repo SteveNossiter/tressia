@@ -107,8 +107,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           if (m > 12) {
             m = 1;
             y++;
-          }
-          if (m < 1) {
+          } else if (m < 1) {
             m = 12;
             y--;
           }
@@ -120,6 +119,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
       _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
     });
+  }
+
+  void _cycleStatus(dynamic item) {
+    TaskStatus next;
+    if (item.status == TaskStatus.todo)
+      next = TaskStatus.inProgress;
+    else if (item.status == TaskStatus.inProgress)
+      next = TaskStatus.done;
+    else
+      next = TaskStatus.todo;
+
+    if (item is Project) {
+      ref.read(projectsProvider.notifier).updateProject(item.copyWith(status: next));
+    } else if (item is ProjectTask) {
+      ref.read(tasksProvider.notifier).updateTask(item.copyWith(status: next));
+    } else if (item is Subtask) {
+      ref.read(subtasksProvider.notifier).updateSubtask(item.copyWith(status: next));
+    }
   }
 
   String _getGanttTitle(DateTime date) {
@@ -1026,6 +1043,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         context, p.title, p.color, labelWidth, maxTotalWidth, timelineWidth, () => _openPhaseEditor(p),
         isPhase: true, collapsed: collapsed, start: _getFraction(p.startDate), end: _getFraction(p.endDate),
         onToggle: () => setState(() { collapsed ? _collapsedGanttPhases.remove(p.id) : _collapsedGanttPhases.add(p.id); }),
+        item: p,
       );
       leftColumnRows.add(pTuple[0]); rightColumnRows.add(pTuple[1]);
 
@@ -1257,14 +1275,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         color: isPhase ? color.withValues(alpha: 0.05) : Colors.transparent,
       ),
       child: GestureDetector(
-        onTap: onTap,
+        onTap: item != null ? () => _cycleStatus(item) : onTap,
+        onLongPress: item != null ? onTap : null,
+        onDoubleTap: item != null ? onTap : null,
         behavior: HitTestBehavior.opaque,
         child: Stack(
           alignment: Alignment.centerLeft,
           clipBehavior: Clip.none,
           children: [
-            if (isPhase)
-              Container(height: 1, color: color.withValues(alpha: 0.3)),
+            Positioned(
+              left: left,
+              width: width,
+              child: Container(
+                height: barHeight,
+                decoration: BoxDecoration(
+                  color: (item?.status == TaskStatus.done)
+                      ? Colors.grey.withValues(alpha: 0.6)
+                      : (isPhase ? Colors.transparent : color.withValues(alpha: isSpanningEntirely ? 0.3 : 1.0)),
+                  borderRadius: isPhase ? BorderRadius.circular(0) : BorderRadius.circular(barHeight / 2),
+                  border: isPhase ? Border.symmetric(vertical: BorderSide(color: (item?.status == TaskStatus.done) ? Colors.grey : color, width: 3), horizontal: BorderSide(color: (item?.status == TaskStatus.done) ? Colors.grey : color, width: 1.5)) : null,
+                  boxShadow: (item?.status == TaskStatus.inProgress) 
+                    ? [
+                        BoxShadow(color: Colors.blue.withValues(alpha: 0.8), blurRadius: 12, spreadRadius: 3),
+                        BoxShadow(color: Colors.blue.withValues(alpha: 0.4), blurRadius: 4, spreadRadius: 1),
+                      ]
+                    : ((isProminent && !isPhase) ? [
+                        BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: 1),
+                      ] : null),
+                ),
+              ),
+            ),
             ValueListenableBuilder<double>(
               valueListenable: _ganttHorizontalOffset,
               builder: (context, scrollOffset, _) {
@@ -1278,8 +1318,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 
                 // Allow labels to show even if bar is partially visible
                 bool isAnyVisible = vWidth > 0;
-                bool shouldSticky = !isPhase && isAnyVisible && canFitStatic && vWidth > textWidth + 16;
-                bool shouldEject = !isPhase && isAnyVisible && !canFitStatic;
+                bool shouldSticky = isAnyVisible && canFitStatic && vWidth > textWidth + 16;
+                bool shouldEject = isAnyVisible && !canFitStatic;
                 
                 if (shouldSticky) {
                   return Positioned(
@@ -1288,27 +1328,35 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Text(
                         title,
                         maxLines: 1,
+                        softWrap: false,
                         style: GoogleFonts.outfit(
                           fontSize: isTask ? 10 : 8,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: (item?.status == TaskStatus.done) ? Colors.white70 : Colors.white,
+                          decoration: (item?.status == TaskStatus.done) ? TextDecoration.lineThrough : null,
                         ),
                       ),
                     ),
                   );
                 } else if (shouldEject) {
+                  // If ejecting to left is off-screen, eject to right
+                  double ejectLeft = left - textWidth - 8;
+                  bool isEjectLeftVisible = ejectLeft > scrollOffset;
+                  
                   return Positioned(
-                    left: left - textWidth - 8,
-                    width: textWidth,
+                    left: isEjectLeftVisible ? ejectLeft : left + width + 8,
+                    width: textWidth * 1.5, // Buffer
                     child: IgnorePointer(
                       child: Text(
                         title,
                         maxLines: 1,
-                        textAlign: TextAlign.right,
+                        softWrap: false,
+                        textAlign: isEjectLeftVisible ? TextAlign.right : TextAlign.left,
                         style: GoogleFonts.outfit(
                           fontSize: isTask ? 10 : 8,
                           fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
+                          color: (item?.status == TaskStatus.done) ? theme.hintColor : theme.colorScheme.onSurface,
+                          decoration: (item?.status == TaskStatus.done) ? TextDecoration.lineThrough : null,
                         ),
                       ),
                     ),
@@ -1316,21 +1364,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 }
                 return const SizedBox.shrink();
               },
-            ),
-            Positioned(
-              left: left,
-              width: width,
-              child: Container(
-                height: barHeight,
-                decoration: BoxDecoration(
-                  color: isPhase ? Colors.transparent : color.withValues(alpha: isSpanningEntirely ? 0.3 : 1.0),
-                  borderRadius: isPhase ? BorderRadius.circular(0) : BorderRadius.circular(barHeight / 2),
-                  border: isPhase ? Border.symmetric(vertical: BorderSide(color: color, width: 3), horizontal: BorderSide(color: color, width: 1.5)) : null,
-                  boxShadow: (isProminent && !isPhase) ? [
-                    BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: 1),
-                  ] : null,
-                ),
-              ),
             ),
           ],
         ),
@@ -1392,12 +1425,12 @@ List<Widget> _buildKanbanGroups(
                   padding: const EdgeInsets.all(20),
                   child: Row(
                     children: [
-                      Container(
-                        width: 4,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: p.color,
-                          borderRadius: BorderRadius.circular(2),
+                      GestureDetector(
+                        onTap: () => _cycleStatus(p),
+                        child: Icon(
+                          p.status == TaskStatus.done ? Icons.check_circle : (p.status == TaskStatus.inProgress ? Icons.circle : Icons.radio_button_unchecked),
+                          size: 20,
+                          color: p.status == TaskStatus.done ? theme.dividerColor : (p.status == TaskStatus.inProgress ? Colors.blue : p.color),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -1521,14 +1554,18 @@ List<Widget> _buildKanbanGroups(
                                               color: Colors.transparent,
                                               child: Row(
                                                 children: [
-                                                  Icon(
-                                                    allDone
-                                                        ? Icons.check_circle
-                                                        : Icons
-                                                              .radio_button_unchecked,
-                                                    color: allDone
-                                                        ? theme.dividerColor
-                                                        : t.color,
+                                                  GestureDetector(
+                                                    onTap: () => _cycleStatus(t),
+                                                    child: Icon(
+                                                      (t.status == TaskStatus.done || allDone)
+                                                          ? Icons.check_circle
+                                                          : (t.status == TaskStatus.inProgress ? Icons.circle : Icons.radio_button_unchecked),
+                                                      color: (t.status == TaskStatus.done || allDone)
+                                                          ? theme.dividerColor
+                                                          : (t.status == TaskStatus.inProgress ? Colors.blue : t.color),
+                                                      size: 18,
+                                                    ),
+                                                  ),                                                        : t.color,
                                                     size: 20,
                                                   ),
                                                   const SizedBox(width: 12),
@@ -1679,10 +1716,13 @@ List<Widget> _buildKanbanGroups(
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        isDone ? Icons.check_circle : Icons.circle_outlined,
-                        size: 18,
-                        color: isDone ? theme.dividerColor : chosenColor,
+                      GestureDetector(
+                        onTap: () => _cycleStatus(s),
+                        child: Icon(
+                          s.status == TaskStatus.done ? Icons.check_circle : (s.status == TaskStatus.inProgress ? Icons.circle : Icons.circle_outlined),
+                          size: 18,
+                          color: s.status == TaskStatus.done ? theme.dividerColor : (s.status == TaskStatus.inProgress ? Colors.blue : chosenColor),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

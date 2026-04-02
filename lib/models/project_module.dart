@@ -90,8 +90,7 @@ class Project {
 
   // Meta
   final String notes;
-  final DateTime startDate;
-  final DateTime endDate;
+  final TaskStatus status;
   final double progress;
   final Color color;
 
@@ -113,6 +112,7 @@ class Project {
     this.notes = '',
     required this.startDate,
     required this.endDate,
+    this.status = TaskStatus.todo,
     this.progress = 0.0,
     this.color = const Color(0xFF38BDF8),
   }) : id = id ?? const Uuid().v4();
@@ -154,6 +154,7 @@ class Project {
     String? notes,
     DateTime? startDate,
     DateTime? endDate,
+    TaskStatus? status,
     double? progress,
     Color? color,
   }) => Project(
@@ -174,6 +175,7 @@ class Project {
     notes: notes ?? this.notes,
     startDate: startDate ?? this.startDate,
     endDate: endDate ?? this.endDate,
+    status: status ?? this.status,
     progress: progress ?? this.progress,
     color: color ?? this.color,
   );
