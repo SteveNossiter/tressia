@@ -207,6 +207,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final subtasks = ref.watch(subtasksProvider);
     final users = ref.watch(systemUsersProvider);
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isDesktop = MediaQuery.of(context).size.width > 800;
 
     // Global Smart Search Logic
