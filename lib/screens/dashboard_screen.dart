@@ -43,10 +43,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   final Set<String> _collapsedGanttPhases = {};
   final Set<String> _collapsedGanttTasks = {};
 
+  final ScrollController _ganttHorizontalScroll = ScrollController();
+  final ValueNotifier<String> _ganttTitleNotifier = ValueNotifier('');
+  final ValueNotifier<double> _ganttHorizontalOffset = ValueNotifier(0.0);
+
   // Row counter for alternating tints
   int _ganttRowIndex = 0;
 
   bool _isFullscreenGantt = false;
+  
+  DateTime? _lastGanttAnchorDate;
+  GanttScale? _lastGanttScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
+  }
+
+  @override
+  void dispose() {
+    _ganttHorizontalScroll.dispose();
+    _ganttTitleNotifier.dispose();
+    _ganttHorizontalOffset.dispose();
+    super.dispose();
+  }
 
   // =====================================================
   // HELPERS
@@ -97,10 +118,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           _ganttAnchorDate = DateTime(_ganttAnchorDate.year + direction, 1, 1);
           break;
       }
+      _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
     });
   }
 
-  String _getGanttTitle() {
+  String _getGanttTitle(DateTime date) {
+    if (!mounted) return '';
     final m = [
       'Jan',
       'Feb',
@@ -118,17 +141,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final d = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     switch (_ganttScale) {
       case GanttScale.day:
-        return '${d[_ganttAnchorDate.weekday - 1]} ${_ganttAnchorDate.day} ${m[_ganttAnchorDate.month - 1]} ${_ganttAnchorDate.year}';
+        return '${d[date.weekday - 1]} ${date.day} ${m[date.month - 1]} ${date.year}';
       case GanttScale.week:
-        DateTime ws = _ganttAnchorDate.subtract(
-          Duration(days: _ganttAnchorDate.weekday % 7),
-        );
+        int wd = date.weekday % 7;
+        DateTime ws = date.subtract(Duration(days: wd == 0 ? 0 : wd));
         DateTime we = ws.add(const Duration(days: 6));
         return '${ws.day} ${m[ws.month - 1]} - ${we.day} ${m[we.month - 1]} ${we.year}';
       case GanttScale.month:
-        return '${m[_ganttAnchorDate.month - 1]} ${_ganttAnchorDate.year}';
+        return '${m[date.month - 1]} ${date.year}';
       case GanttScale.year:
-        return '${_ganttAnchorDate.year}';
+        return '${date.year}';
+    }
+  }
+
+  void _updateGanttTitleFromScroll(double offset, double unitWidth, DateTime startAnchor, GanttScale scale) {
+    if (unitWidth <= 0 || !mounted) return;
+    double unitsScrolled = offset / unitWidth;
+    DateTime visibleDate = startAnchor;
+    
+    if (scale == GanttScale.day) {
+      visibleDate = startAnchor.add(Duration(hours: unitsScrolled.toInt() + 1));
+    } else {
+      visibleDate = startAnchor.add(Duration(days: unitsScrolled.toInt() + 1));
+    }
+    
+    String newTitle = _getGanttTitle(visibleDate);
+    if (_ganttTitleNotifier.value != newTitle) {
+      Future.microtask(() => _ganttTitleNotifier.value = newTitle);
     }
   }
 
@@ -228,17 +267,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     bool isLandscapePhone = MediaQuery.of(context).orientation == Orientation.landscape && MediaQuery.of(context).size.height < 600;
     if (_isFullscreenGantt || isLandscapePhone) {
       return Scaffold(
+        backgroundColor: isDark ? const Color(0xFF161816) : const Color(0xFFFBF8F1),
         appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => setState(() => _isFullscreenGantt = false),
           ),
           title: Text(
-            'Fullscreen Gantt',
-            style: GoogleFonts.lora(fontWeight: FontWeight.w600),
+            'Timeline',
+            style: GoogleFonts.lora(fontWeight: FontWeight.w600, color: theme.primaryColor),
           ),
-          elevation: 0,
-          backgroundColor: Colors.transparent,
         ),
         body: Padding(
           padding: const EdgeInsets.all(16),
@@ -685,7 +725,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               onPressed: () => _navigateGantt(-1),
             ),
             InkWell(
-              onTap: () => setState(() => _ganttAnchorDate = DateTime.now()),
+              onTap: () {
+                setState(() => _ganttAnchorDate = DateTime.now());
+                _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
+              },
               borderRadius: BorderRadius.circular(12),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -699,12 +742,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     color: theme.primaryColor.withValues(alpha: 0.15),
                   ),
                 ),
-                child: Text(
-                  _getGanttTitle(),
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: theme.primaryColor,
+                child: ValueListenableBuilder<String>(
+                  valueListenable: _ganttTitleNotifier,
+                  builder: (context, title, _) => Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: theme.primaryColor,
+                    ),
                   ),
                 ),
               ),
@@ -726,10 +772,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _scaleChip(String label, GanttScale scale, ThemeData theme) {
     bool active = _ganttScale == scale;
     return GestureDetector(
-      onTap: () => setState(() {
-        _ganttScale = scale;
-        _ganttAnchorDate = DateTime.now();
-      }),
+      onTap: () {
+        setState(() {
+          _ganttScale = scale;
+          _ganttAnchorDate = DateTime.now();
+        });
+        _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -840,31 +889,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Unit logic (same as before)
     if (scale == GanttScale.day) {
-      int startHour = 7;
-      int endHour = 19;
-      for (var p in projects) {
-        if (_spansDay(p.startDate, p.endDate, _ganttAnchorDate)) {
-          for (var t in tasks.where((t) => t.projectId == p.id)) {
-            if (_spansDay(t.startDate, t.endDate, _ganttAnchorDate)) {
-              if (t.startDate.day == _ganttAnchorDate.day && t.startDate.hour < startHour) startHour = t.startDate.hour;
-              if (t.endDate.day == _ganttAnchorDate.day && t.endDate.hour >= endHour) endHour = t.endDate.hour + 1;
-            }
-          }
-        }
-      }
-      startHour = startHour.clamp(0, 24);
-      endHour = endHour.clamp(startHour + 1, 24);
-      totalUnits = endHour - startHour;
-      unitWidth = (timelineWidth / totalUnits).clamp(40.0, double.infinity);
-      startAnchor = DateTime(_ganttAnchorDate.year, _ganttAnchorDate.month, _ganttAnchorDate.day, startHour);
+      int offsetDays = 3;
+      totalUnits = (offsetDays * 2 + 1) * 24; 
+      unitWidth = (timelineWidth / 24).clamp(40.0, double.infinity);
+      startAnchor = DateTime(_ganttAnchorDate.year, _ganttAnchorDate.month, _ganttAnchorDate.day - offsetDays, 0);
 
-      if (_isToday(_ganttAnchorDate)) {
-        final now = DateTime.now();
-        currentPos = (now.hour - startHour + (now.minute / 60.0)) * unitWidth;
+      final now = DateTime.now();
+      if (now.isAfter(startAnchor) && now.isBefore(startAnchor.add(Duration(hours: totalUnits)))) {
+         currentPos = (now.difference(startAnchor).inMinutes / 60.0) * unitWidth;
       }
       for (int i = 0; i < totalUnits; i++) {
-        int h = startHour + i;
-        bool isNow = DateTime.now().hour == h && _isToday(_ganttAnchorDate);
+        DateTime d = startAnchor.add(Duration(hours: i));
+        bool isNow = now.year == d.year && now.month == d.month && now.day == d.day && now.hour == d.hour;
+        int h = d.hour;
         String label = h == 0 ? '12am' : h < 12 ? '${h}am' : h == 12 ? '12pm' : '${h - 12}pm';
         headerWidgets.add(_buildHeaderCell(label, isNow, unitWidth, theme));
       }
@@ -910,24 +947,57 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         headerWidgets.add(_buildHeaderCell('${d.day}', isNow, unitWidth, theme));
       }
     } else if (scale == GanttScale.year) {
-      totalUnits = 12;
-      unitWidth = (timelineWidth / totalUnits).clamp(60.0, double.infinity);
-      startAnchor = DateTime(_ganttAnchorDate.year, 1, 1);
-      final now = DateTime.now();
-      int currentYear = DateTime.now().year;
-      if (currentYear == _ganttAnchorDate.year) {
-        int daysPassed = now.difference(startAnchor).inDays;
-        int daysInYear = DateTime(currentYear, 12, 31).difference(startAnchor).inDays + 1;
-        currentPos = (daysPassed / daysInYear) * (totalUnits * unitWidth);
+      int offsetYears = 1;
+      int numYears = offsetYears * 2 + 1;
+      startAnchor = DateTime(_ganttAnchorDate.year - offsetYears, 1, 1);
+      
+      int totalDays = 0;
+      for (int i = 0; i < numYears * 12; i++) {
+         int y = startAnchor.year + (i ~/ 12);
+         int m = (i % 12) + 1;
+         totalDays += DateTime(y, m + 1, 0).day;
       }
+      totalUnits = totalDays; 
+      unitWidth = (timelineWidth / 365).clamp(5.0, double.infinity);
+      
+      final now = DateTime.now();
+      if (now.isAfter(startAnchor) && now.isBefore(startAnchor.add(Duration(days: totalUnits)))) {
+        currentPos = (now.difference(startAnchor).inMinutes / (24 * 60.0)) * unitWidth;
+      }
+      
       final List<String> months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      for (int i = 0; i < 12; i++) {
-        bool isNow = now.year == startAnchor.year && now.month == (i + 1);
-        headerWidgets.add(_buildHeaderCell(months[i], isNow, unitWidth, theme));
+      for (int i = 0; i < numYears * 12; i++) {
+        int y = startAnchor.year + (i ~/ 12);
+        int mId = (i % 12);
+        int daysInMonth = DateTime(y, mId + 2, 0).day; 
+        bool isNow = now.year == y && now.month == mId + 1;
+        headerWidgets.add(_buildHeaderCell('${months[mId]} $y', isNow, unitWidth * daysInMonth, theme));
       }
     }
 
     double maxTotalWidth = totalUnits * unitWidth;
+
+    if (_lastGanttAnchorDate != _ganttAnchorDate || _lastGanttScale != scale) {
+      _lastGanttAnchorDate = _ganttAnchorDate;
+      _lastGanttScale = scale;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_ganttHorizontalScroll.hasClients) {
+          double jumpTarget = 0;
+          if (scale == GanttScale.day) jumpTarget = (3 * 24) * unitWidth;
+          if (scale == GanttScale.week) jumpTarget = (4 * 7) * unitWidth;
+          if (scale == GanttScale.month) {
+             int offsetMonths = 3;
+             double offsetDaysTarget = 0;
+             for (int m = 0; m < offsetMonths; m++) {
+               offsetDaysTarget += DateTime(startAnchor.year, startAnchor.month + m, 0).day;
+             }
+             jumpTarget = offsetDaysTarget * unitWidth;
+          }
+          if (scale == GanttScale.year) jumpTarget = 365 * unitWidth;
+          _ganttHorizontalScroll.jumpTo(jumpTarget);
+        }
+      });
+    }
 
     double _getFraction(DateTime d) {
       if (scale == GanttScale.day) {
@@ -955,7 +1025,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       // Add Phase row
       var pTuple = _buildDayRow(
-        context, p.title, p.color, labelWidth, maxTotalWidth, () => _openPhaseEditor(p),
+        context, p.title, p.color, labelWidth, maxTotalWidth, timelineWidth, () => _openPhaseEditor(p),
         isPhase: true, collapsed: collapsed, start: _getFraction(p.startDate), end: _getFraction(p.endDate),
         onToggle: () => setState(() { collapsed ? _collapsedGanttPhases.remove(p.id) : _collapsedGanttPhases.add(p.id); }),
       );
@@ -968,7 +1038,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           bool tCollapsed = _collapsedGanttTasks.contains(t.id);
           
           var tTuple = _buildDayRow(
-            context, t.title, t.color, labelWidth, maxTotalWidth, () => _openTaskEditor(t),
+            context, t.title, t.color, labelWidth, maxTotalWidth, timelineWidth, () => _openTaskEditor(t),
             item: t, isTask: true, collapsed: tCollapsed, start: _getFraction(t.startDate), end: _getFraction(t.endDate),
             onToggle: () => setState(() { tCollapsed ? _collapsedGanttTasks.remove(t.id) : _collapsedGanttTasks.add(t.id); }),
           );
@@ -979,7 +1049,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             for (var s in subList) {
               if (_isVisible(s.startDate, s.endDate)) {
                 var sTuple = _buildDayRow(
-                  context, s.title, s.color ?? t.color, labelWidth, maxTotalWidth, () => _openSubtaskEditor(s),
+                  context, s.title, s.color ?? t.color, labelWidth, maxTotalWidth, timelineWidth, () => _openSubtaskEditor(s),
                   item: s, start: _getFraction(s.startDate), end: _getFraction(s.endDate),
                 );
                 leftColumnRows.add(sTuple[0]); rightColumnRows.add(sTuple[1]);
@@ -1012,8 +1082,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             // Right Horizontal Scrolling Body
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notif) {
+                  if (notif is ScrollUpdateNotification) {
+                    _updateGanttTitleFromScroll(notif.metrics.pixels, unitWidth, startAnchor, scale);
+                    _ganttHorizontalOffset.value = notif.metrics.pixels;
+                  }
+                  return false;
+                },
+                child: SingleChildScrollView(
+                  controller: _ganttHorizontalScroll,
+                  scrollDirection: Axis.horizontal,
                 child: SizedBox(
                   width: maxTotalWidth,
                   child: Stack(
@@ -1023,16 +1102,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Row(
                         children: List.generate(totalUnits, (i) {
                           bool isBolder = false;
-                          if (scale == GanttScale.month && (i % 7 == 0 || i == 0)) isBolder = true;
-                          if (scale == GanttScale.year) isBolder = true;
+                          bool isDrawn = true;
+                          
+                          if (scale == GanttScale.month) {
+                            DateTime d = startAnchor.add(Duration(days: i));
+                            if (d.weekday == 1) isBolder = true; // Monday
+                          } else if (scale == GanttScale.year) {
+                            DateTime d = startAnchor.add(Duration(days: i));
+                            if (d.day == 1) {
+                              isBolder = true; // Month bold
+                            } else if (d.weekday == 1) {
+                              isBolder = false; // Week subtle
+                            } else {
+                              isDrawn = false; // Empty standard days removed
+                            }
+                          }
                           
                           return Container(
                             width: unitWidth,
-                            decoration: BoxDecoration(
+                            decoration: (!isDrawn) ? null : BoxDecoration(
                               border: Border(
                                 left: BorderSide(
-                                  color: theme.dividerColor.withValues(alpha: isBolder ? 0.2 : 0.05),
-                                  width: isBolder ? 1.5 : 1.0
+                                  color: theme.dividerColor.withValues(alpha: isBolder ? 0.3 : 0.05),
+                                  width: isBolder ? 2.0 : 1.0
                                 )
                               )
                             ),
@@ -1064,6 +1156,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
               ),
+            ),
             ),
           ],
         ),
@@ -1097,6 +1190,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     Color color,
     double labelWidth,
     double timelineWidth,
+    double viewportWidth,
     VoidCallback onTap, {
     bool isPhase = false,
     bool isTask = false,
@@ -1173,6 +1267,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           children: [
             if (isPhase)
               Container(height: 1, color: color.withValues(alpha: 0.3)),
+            ValueListenableBuilder<double>(
+              valueListenable: _ganttHorizontalOffset,
+              builder: (context, scrollOffset, _) {
+                double textWidth = title.length * 6.5; // Heuristic
+                bool canFitStatic = width > textWidth + 16;
+                
+                // Visible portion of the bar
+                double vStart = left > scrollOffset ? left : scrollOffset;
+                double vEnd = (left + width) < (scrollOffset + viewportWidth) ? (left + width) : (scrollOffset + viewportWidth);
+                double vWidth = vEnd - vStart;
+                
+                bool shouldSticky = !isPhase && isProminent && canFitStatic && vWidth > textWidth + 16;
+                bool shouldEject = !isPhase && isProminent && !canFitStatic;
+                
+                if (shouldSticky) {
+                  return Positioned(
+                    left: vStart + 8,
+                    child: IgnorePointer(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        style: GoogleFonts.outfit(
+                          fontSize: isTask ? 10 : 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  );
+                } else if (shouldEject) {
+                  return Positioned(
+                    left: left - textWidth - 8,
+                    width: textWidth,
+                    child: IgnorePointer(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.outfit(
+                          fontSize: isTask ? 10 : 8,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
             Positioned(
               left: left,
               width: width,
@@ -1182,27 +1326,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   color: isPhase ? Colors.transparent : color.withValues(alpha: isSpanningEntirely ? 0.3 : 1.0),
                   borderRadius: isPhase ? BorderRadius.circular(0) : BorderRadius.circular(barHeight / 2),
                   border: isPhase ? Border.symmetric(vertical: BorderSide(color: color, width: 3), horizontal: BorderSide(color: color, width: 1.5)) : null,
-                  boxShadow: (isProminent && !isPhase) ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(0, 3))] : null,
+                  boxShadow: (isProminent && !isPhase) ? [
+                    BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: 1),
+                  ] : null,
                 ),
-                child: (!isPhase && isProminent) ? Transform.translate(
-                  offset: Offset(extendsLeft || width < 60 ? -120 : 0, 0),
-                  child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Align(
-                    alignment: extendsLeft || width < 60 ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      style: GoogleFonts.outfit(
-                        fontSize: isTask ? 10 : 8,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      ),
-                    ),
-                  ),
-                ) : null,
               ),
             ),
           ],
