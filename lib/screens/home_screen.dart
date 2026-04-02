@@ -60,7 +60,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: Row(
           children: [
             Image.asset(
-              'assets/tressia_logo.png',
+              'assets/images/tressia_logo.png',
               height: 38,
               fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => Row(

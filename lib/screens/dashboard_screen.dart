@@ -121,15 +121,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
   }
 
-  void _cycleStatus(dynamic item) {
-    TaskStatus next;
-    if (item.status == TaskStatus.todo)
-      next = TaskStatus.inProgress;
-    else if (item.status == TaskStatus.inProgress)
-      next = TaskStatus.done;
-    else
-      next = TaskStatus.todo;
+  void _showStatusMenu(BuildContext context, Offset globalPos, dynamic item) {
+    if (item == null) return;
+    showMenu<TaskStatus>(
+      context: context,
+      position: RelativeRect.fromLTRB(globalPos.dx, globalPos.dy, globalPos.dx, globalPos.dy),
+      items: [
+        const PopupMenuItem(value: TaskStatus.todo, child: Text('To-Do')),
+        const PopupMenuItem(value: TaskStatus.inProgress, child: Text('In Progress')),
+        const PopupMenuItem(value: TaskStatus.done, child: Text('Done')),
+      ],
+      elevation: 8,
+    ).then((status) {
+      if (status != null) {
+        _updateStatus(item, status);
+      }
+    });
+  }
 
+  void _updateStatus(dynamic item, TaskStatus next) {
     if (item is Project) {
       ref.read(projectsProvider.notifier).updateProject(item.copyWith(status: next));
     } else if (item is ProjectTask) {
@@ -794,8 +804,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         setState(() {
           _ganttScale = scale;
           _ganttAnchorDate = DateTime.now();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_ganttScrollController.hasClients) {
+              _ganttScrollController.jumpTo(0);
+            }
+          });
         });
-        _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
+        _ganttTitleNotifier.value = _getGanttTitle(DateTime.now());
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
@@ -1275,9 +1290,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         color: isPhase ? color.withValues(alpha: 0.05) : Colors.transparent,
       ),
       child: GestureDetector(
-        onTap: item != null ? () => _cycleStatus(item) : onTap,
-        onLongPress: item != null ? onTap : null,
-        onDoubleTap: item != null ? onTap : null,
+        onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Stack(
           alignment: Alignment.centerLeft,
@@ -1426,7 +1439,7 @@ List<Widget> _buildKanbanGroups(
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => _cycleStatus(p),
+                        onTapDown: (details) => _showStatusMenu(context, details.globalPosition, p),
                         child: Icon(
                           p.status == TaskStatus.done ? Icons.check_circle : (p.status == TaskStatus.inProgress ? Icons.circle : Icons.radio_button_unchecked),
                           size: 20,
@@ -1555,7 +1568,7 @@ List<Widget> _buildKanbanGroups(
                                               child: Row(
                                                 children: [
                                                   GestureDetector(
-                                                    onTap: () => _cycleStatus(t),
+                                                    onTapDown: (details) => _showStatusMenu(context, details.globalPosition, t),
                                                     child: Icon(
                                                       (t.status == TaskStatus.done || allDone)
                                                           ? Icons.check_circle
@@ -1709,7 +1722,7 @@ List<Widget> _buildKanbanGroups(
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => _cycleStatus(s),
+                        onTapDown: (details) => _showStatusMenu(context, details.globalPosition, s),
                         child: Icon(
                           s.status == TaskStatus.done ? Icons.check_circle : (s.status == TaskStatus.inProgress ? Icons.circle : Icons.circle_outlined),
                           size: 18,
