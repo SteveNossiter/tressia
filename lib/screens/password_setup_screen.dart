@@ -50,6 +50,27 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
         throw Exception('Failed to migrate invite credentials: ${res.data}');
       }
 
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Password Created!'),
+            content: const Text('Your secure account has been finalized. Please log in with your new credentials to complete your profile at the Dashboard.'),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await Supabase.instance.client.auth.signOut();
+                  // AuthGate will naturally pop them to login screen
+                  if (mounted) Navigator.pop(ctx);
+                },
+                child: const Text('LOG IN NOW'),
+              ),
+            ],
+          ),
+        );
+      }
+
     } catch (e) {
       if (mounted) setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
     } finally {

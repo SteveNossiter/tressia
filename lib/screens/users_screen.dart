@@ -84,29 +84,48 @@ class _InviteCard extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardTheme.color?.withValues(alpha: 0.5) ??
-            theme.scaffoldBackgroundColor.withValues(alpha: 0.5),
+        color: Colors.blue.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.7)),
+        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: theme.dividerColor.withValues(alpha: 0.1),
-            child: const Icon(Icons.person_outline, size: 20),
+            backgroundColor: Colors.blue.withValues(alpha: 0.1),
+            child: const Icon(Icons.mail_outline, size: 20, color: Colors.blue),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  invite.fullName,
-                  style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      invite.fullName,
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'PENDING',
+                        style: GoogleFonts.outfit(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
                   '${invite.email} • Invited as ${invite.role.toUpperCase()}',
@@ -115,28 +134,36 @@ class _InviteCard extends ConsumerWidget {
                     color: theme.hintColor,
                   ),
                 ),
-                Text(
-                  'Sent ${DateFormat('d MMM yyyy').format(invite.createdAt)}',
-                  style: GoogleFonts.outfit(
-                    fontSize: 10,
-                    color: theme.hintColor,
-                    fontStyle: FontStyle.italic,
+                if (invite.actionLink != null && invite.actionLink!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: TextButton.icon(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: invite.actionLink!));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Invite link copied to clipboard!')),
+                        );
+                      },
+                      icon: const Icon(Icons.link, size: 14),
+                      label: Text(
+                        'COPY INVITE LINK',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.blue,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
-          if (invite.actionLink != null && invite.actionLink!.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.copy, size: 18, color: Colors.blue),
-              tooltip: 'Copy Invite Link',
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: invite.actionLink!));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invite link copied to clipboard!')),
-                );
-              },
-            ),
           IconButton(
             icon: const Icon(Icons.close, size: 18),
             tooltip: 'Cancel Invite',

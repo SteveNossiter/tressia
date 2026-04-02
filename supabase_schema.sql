@@ -277,7 +277,7 @@ BEGIN
 
     -- Is this new user an Invitee? If yes, gracefully do absolutely NO database manipulation!
     -- The customized Flutter Edge Function securely and asynchronously handles migrating Invites.
-    SELECT EXISTS(SELECT 1 FROM public.invites WHERE email = NEW.email) INTO invite_exists;
+    SELECT EXISTS(SELECT 1 FROM public.invites WHERE LOWER(email) = LOWER(NEW.email)) INTO invite_exists;
     IF invite_exists THEN
         RETURN NEW;
     END IF;

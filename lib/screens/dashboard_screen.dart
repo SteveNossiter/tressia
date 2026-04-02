@@ -890,7 +890,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Unit logic (same as before)
     if (scale == GanttScale.day) {
-      int offsetDays = 3;
+      int offsetDays = 60;
       totalUnits = (offsetDays * 2 + 1) * 24; 
       unitWidth = (timelineWidth / 24).clamp(40.0, double.infinity);
       startAnchor = DateTime(_ganttAnchorDate.year, _ganttAnchorDate.month, _ganttAnchorDate.day - offsetDays, 0);
@@ -908,8 +908,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     
     } else if (scale == GanttScale.week) {
-      int offsetWeeks = 4;
-      totalUnits = 7 * (offsetWeeks * 2 + 1); // 9 weeks total
+      int offsetWeeks = 40;
+      totalUnits = 7 * (offsetWeeks * 2 + 1); 
       unitWidth = (timelineWidth / 7).clamp(60.0, double.infinity);
       int weekday = _ganttAnchorDate.weekday;
       startAnchor = _ganttAnchorDate.subtract(Duration(days: weekday - 1 + (offsetWeeks * 7)));
@@ -927,7 +927,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     
     } else if (scale == GanttScale.month) {
-      int offsetMonths = 3;
+      int offsetMonths = 12;
       int numMonths = offsetMonths * 2 + 1;
       
       startAnchor = DateTime(_ganttAnchorDate.year, _ganttAnchorDate.month - offsetMonths, 1);
@@ -948,7 +948,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         headerWidgets.add(_buildHeaderCell('${d.day}', isNow, unitWidth, theme));
       }
     } else if (scale == GanttScale.year) {
-      int offsetYears = 1;
+      int offsetYears = 3;
       int numYears = offsetYears * 2 + 1;
       startAnchor = DateTime(_ganttAnchorDate.year - offsetYears, 1, 1);
       
@@ -984,17 +984,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_ganttHorizontalScroll.hasClients) {
           double jumpTarget = 0;
-          if (scale == GanttScale.day) jumpTarget = (3 * 24) * unitWidth;
-          if (scale == GanttScale.week) jumpTarget = (4 * 7) * unitWidth;
+          if (scale == GanttScale.day) jumpTarget = (60 * 24) * unitWidth;
+          if (scale == GanttScale.week) jumpTarget = (24 * 7) * unitWidth;
           if (scale == GanttScale.month) {
-             int offsetMonths = 3;
+             int offsetMonths = 12;
              double offsetDaysTarget = 0;
              for (int m = 0; m < offsetMonths; m++) {
                offsetDaysTarget += DateTime(startAnchor.year, startAnchor.month + m, 0).day;
              }
              jumpTarget = offsetDaysTarget * unitWidth;
           }
-          if (scale == GanttScale.year) jumpTarget = 365 * unitWidth;
+          if (scale == GanttScale.year) jumpTarget = (totalUnits / 2.0) * unitWidth;
           _ganttHorizontalScroll.jumpTo(jumpTarget);
         }
       });
@@ -1003,11 +1003,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     double _getFraction(DateTime d) {
       if (scale == GanttScale.day) {
         return d.difference(startAnchor).inMinutes / (totalUnits * 60);
-      } else if (scale == GanttScale.week || scale == GanttScale.month) {
-        return d.difference(startAnchor).inMinutes / (totalUnits * 24 * 60);
-      } else if (scale == GanttScale.year) {
-        DateTime endYear = DateTime(startAnchor.year + 1, 1, 1);
-        return d.difference(startAnchor).inMinutes / endYear.difference(startAnchor).inMinutes;
+      } else if (scale == GanttScale.week || scale == GanttScale.month || scale == GanttScale.year) {
+        return d.difference(startAnchor).inMinutes / (totalUnits * 24 * 60.0);
       }
       return 0;
     }
@@ -1124,8 +1121,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             decoration: (!isDrawn) ? null : BoxDecoration(
                               border: Border(
                                 left: BorderSide(
-                                  color: theme.dividerColor.withValues(alpha: isBolder ? 0.3 : 0.05),
-                                  width: isBolder ? 2.0 : 1.0
+                                  color: theme.dividerColor.withValues(alpha: isBolder ? 0.6 : 0.2),
+                                  width: isBolder ? 2.5 : 1.0
                                 )
                               )
                             ),
@@ -1279,8 +1276,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 double vEnd = (left + width) < (scrollOffset + viewportWidth) ? (left + width) : (scrollOffset + viewportWidth);
                 double vWidth = vEnd - vStart;
                 
-                bool shouldSticky = !isPhase && isProminent && canFitStatic && vWidth > textWidth + 16;
-                bool shouldEject = !isPhase && isProminent && !canFitStatic;
+                // Allow labels to show even if bar is partially visible
+                bool isAnyVisible = vWidth > 0;
+                bool shouldSticky = !isPhase && isAnyVisible && canFitStatic && vWidth > textWidth + 16;
+                bool shouldEject = !isPhase && isAnyVisible && !canFitStatic;
                 
                 if (shouldSticky) {
                   return Positioned(

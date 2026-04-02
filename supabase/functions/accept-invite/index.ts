@@ -46,7 +46,7 @@ serve(async (req) => {
     const { data: invite, error: inviteError } = await supabaseAdmin
       .from('invites')
       .select('*')
-      .eq('email', user.email)
+      .ilike('email', user.email) // Case-insensitive lookup
       .single()
 
     if (inviteError || !invite) {
