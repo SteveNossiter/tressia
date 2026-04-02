@@ -805,8 +805,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           _ganttScale = scale;
           _ganttAnchorDate = DateTime.now();
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_ganttScrollController.hasClients) {
-              _ganttScrollController.jumpTo(0);
+            if (_ganttHorizontalScroll.hasClients) {
+              _ganttHorizontalScroll.jumpTo(0);
             }
           });
         });
