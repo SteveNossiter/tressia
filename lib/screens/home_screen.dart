@@ -30,7 +30,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     (Icons.people_outlined, 'Clients'),
     (Icons.business_outlined, 'Providers'),
     if (isAdmin) (Icons.group_outlined, 'Users'),
-    (Icons.apartment_rounded, 'Clinic'),
+    (Icons.cottage_outlined, 'Clinic'),
   ];
 
   List<Widget> _pages(bool isAdmin) => [
@@ -72,7 +72,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       color: theme.primaryColor,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.cottage, size: 20, color: Colors.white),
+                    child: const Icon(Icons.eco_outlined, size: 20, color: Colors.white),
                   ),
                   const SizedBox(width: 8),
                   Text(
