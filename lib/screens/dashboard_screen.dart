@@ -1565,8 +1565,6 @@ List<Widget> _buildKanbanGroups(
                                                           : (t.status == TaskStatus.inProgress ? Colors.blue : t.color),
                                                       size: 18,
                                                     ),
-                                                  ),                                                        : t.color,
-                                                    size: 20,
                                                   ),
                                                   const SizedBox(width: 12),
                                                   Expanded(
@@ -1576,14 +1574,11 @@ List<Widget> _buildKanbanGroups(
                                                         fontSize: 15,
                                                         fontWeight: FontWeight.w700,
                                                         decoration: allDone
-                                                            ? TextDecoration
-                                                                  .lineThrough
+                                                            ? TextDecoration.lineThrough
                                                             : null,
                                                         color: allDone
                                                             ? theme.hintColor
-                                                            : theme
-                                                                  .colorScheme
-                                                                  .onSurface,
+                                                            : theme.colorScheme.onSurface,
                                                       ),
                                                     ),
                                                   ),
@@ -1591,12 +1586,9 @@ List<Widget> _buildKanbanGroups(
                                                     GestureDetector(
                                                       onTap: () => setState(() {
                                                         if (isTaskCollapsed)
-                                                          _collapsedKanbanTasks
-                                                              .remove(t.id);
+                                                          _collapsedKanbanTasks.remove(t.id);
                                                         else
-                                                          _collapsedKanbanTasks.add(
-                                                            t.id,
-                                                          );
+                                                          _collapsedKanbanTasks.add(t.id);
                                                       }),
                                                       child: Icon(
                                                         isTaskCollapsed
@@ -1669,8 +1661,8 @@ List<Widget> _buildKanbanGroups(
     Color taskColor,
   ) {
     final theme = Theme.of(context);
-    final isDone = s.status == TaskStatus.done;
     final chosenColor = s.color ?? taskColor;
+    final bool isDone = s.status == TaskStatus.done;
 
     int subtaskUrgency = _getUrgency(s.endDate, s.status);
 

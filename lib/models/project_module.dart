@@ -90,6 +90,8 @@ class Project {
 
   // Meta
   final String notes;
+  final DateTime startDate;
+  final DateTime endDate;
   final TaskStatus status;
   final double progress;
   final Color color;
