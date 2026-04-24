@@ -7,7 +7,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/app_state.dart';
 import '../widgets/dialogs/user_creator.dart';
 import '../widgets/dialogs/glass_dialog.dart';
-import '../models/clinic_settings.dart';
 
 class ClinicSetupScreen extends ConsumerStatefulWidget {
   const ClinicSetupScreen({super.key});
@@ -20,12 +19,20 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
   final _picker = ImagePicker();
   List<UserAssociation> _userAssociations = [];
 
+  late TextEditingController _nameCtrl, _descCtrl, _addressCtrl, _phoneCtrl, _emailCtrl;
   late TextEditingController _userFirstNameCtrl, _userLastNameCtrl, _userPhoneCtrl, _userAddressCtrl, _userEmailCtrl;
 
   @override
   void initState() {
     super.initState();
+    final current = ref.read(clinicSettingsProvider);
     final user = ref.read(currentUserProvider);
+
+    _nameCtrl = TextEditingController(text: current.clinicName);
+    _descCtrl = TextEditingController(text: current.description);
+    _addressCtrl = TextEditingController(text: current.address);
+    _phoneCtrl = TextEditingController(text: current.phone);
+    _emailCtrl = TextEditingController(text: current.email);
 
     _userFirstNameCtrl = TextEditingController(text: user.firstName);
     _userLastNameCtrl = TextEditingController(text: user.lastName);
@@ -35,6 +42,48 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
     _userAssociations = List.from(user.associations);
   }
 
+  Future<void> _pickLogo() async {
+    final currentUser = ref.read(currentUserProvider);
+    if (!currentUser.isAdmin) return;
+
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      final bytes = await image.readAsBytes();
+      final base64String = base64Encode(bytes);
+
+      final current = ref.read(clinicSettingsProvider);
+      ref
+          .read(clinicSettingsProvider.notifier)
+          .updateSettings(current.copyWith(base64Logo: base64String));
+    }
+  }
+
+  void _saveSettings() {
+    final currentUser = ref.read(currentUserProvider);
+    if (!currentUser.isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only Admins can modify clinic details.')),
+      );
+      return;
+    }
+
+    final current = ref.read(clinicSettingsProvider);
+    ref
+        .read(clinicSettingsProvider.notifier)
+        .updateSettings(
+          current.copyWith(
+            clinicName: _nameCtrl.text,
+            description: _descCtrl.text,
+            address: _addressCtrl.text,
+            phone: _phoneCtrl.text,
+            email: _emailCtrl.text,
+          ),
+        );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Clinic Settings Saved')));
+  }
+
   Future<void> _logout() async {
     await Supabase.instance.client.auth.signOut();
   }
@@ -42,6 +91,7 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
   void _completeSetup() async {
     try {
       final currentUser = ref.read(currentUserProvider);
+      final currentClinic = ref.read(clinicSettingsProvider);
 
       // Save Personal Details
       await Supabase.instance.client.from('users').update({
@@ -53,8 +103,21 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
         'setup_complete': true,
       }).eq('id', currentUser.id);
 
+      // Save Clinic Details (if admin and NOT yet setup)
+      if (currentUser.isAdmin && !currentClinic.setupComplete) {
+        await Supabase.instance.client.from('clinics').update({
+          'name': _nameCtrl.text,
+          'description': _descCtrl.text,
+          'address': _addressCtrl.text,
+          'phone': _phoneCtrl.text,
+          'email': _emailCtrl.text,
+          'setup_complete': true,
+        }).eq('id', currentClinic.id);
+      }
+
       // Force providers to re-fetch the updated data
       ref.invalidate(currentUserProvider);
+      ref.invalidate(clinicSettingsProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,7 +140,11 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+    final currentUser = ref.watch(currentUserProvider);
+    final currentClinic = ref.watch(clinicSettingsProvider);
+    // We strictly only need user setup here
+    final showClinicSection = false; 
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
@@ -104,16 +171,9 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Account Profile',
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: theme.primaryColor,
-                      ),
-                    ),
+                    // PERSONAL SECTION
+                    _sectionHeader(theme, '1. Personal Profile'),
                     const SizedBox(height: 24),
-                    
                     Row(
                       children: [
                         Expanded(
@@ -134,22 +194,31 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _userEmailCtrl,
-                      decoration: const InputDecoration(labelText: 'Public / Work Email'),
+                      decoration: const InputDecoration(labelText: 'Public Email'),
                       keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _userPhoneCtrl,
-                      decoration: const InputDecoration(labelText: 'Public / Work Phone'),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _userAddressCtrl,
-                      decoration: const InputDecoration(labelText: 'Mailing Address (Optional)'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _userPhoneCtrl,
+                            decoration: const InputDecoration(labelText: 'Public Phone Number'),
+                            keyboardType: TextInputType.phone,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: _userAddressCtrl,
+                            decoration: const InputDecoration(labelText: 'Professional / Work Address'),
+                          ),
+                        ),
+                      ],
                     ),
                     
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                     Text(
                       'Professional Associations',
                       style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: theme.hintColor),
@@ -209,6 +278,45 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('ADD ASSOCIATION'),
                     ),
+                    
+                    if (showClinicSection) ...[
+                      const SizedBox(height: 48),
+                      _sectionHeader(theme, '2. Clinic Identity'),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(labelText: 'Clinic / Business Name'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _descCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'Short Description'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _addressCtrl,
+                        decoration: const InputDecoration(labelText: 'Clinic Address'),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _phoneCtrl,
+                              decoration: const InputDecoration(labelText: 'Contact Phone'),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextField(
+                              controller: _emailCtrl,
+                              decoration: const InputDecoration(labelText: 'Public Email'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
 
                     const SizedBox(height: 56),
                     

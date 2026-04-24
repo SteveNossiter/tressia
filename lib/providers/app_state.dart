@@ -28,12 +28,12 @@ class CurrentUserNotifier extends Notifier<AppUser> {
       _sub = Supabase.instance.client
           .from('users')
           .stream(primaryKey: ['id'])
+          .eq('id', authUser.id)
           .listen((data) {
             if (data.isNotEmpty &&
                 Supabase.instance.client.auth.currentUser?.id == authUser.id) {
-              // Local filtering to avoid PostgREST cache issues with .eq() on stream occasionally
-              final row = data.firstWhere((r) => r['id'] == authUser.id, orElse: () => {});
-              if (row.isNotEmpty) state = _mapToAppUser(row);
+              final row = data.first;
+              state = _mapToAppUser(row);
             }
           });
     }
@@ -102,10 +102,10 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
       _sub = Supabase.instance.client
           .from('users')
           .stream(primaryKey: ['id'])
+          .eq('clinic_id', user.clinicId)
           .listen((dataList) {
             if (ref.read(currentUserProvider).clinicId == user.clinicId) {
-              final filtered = dataList.where((r) => r['clinic_id'] == user.clinicId).toList();
-              state = filtered.map(_mapToAppUser).toList();
+              state = dataList.map(_mapToAppUser).toList();
             }
           });
     }
@@ -123,25 +123,14 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
     final currentUser = ref.read(currentUserProvider);
     if (currentUser.clinicId.isEmpty) return;
     try {
-      final link = await _repo.inviteUser(
+      await _repo.inviteUser(
         email: u.email,
         role: u.role.name,
         clinicId: currentUser.clinicId,
         fullName: u.name,
       );
-      
-      if (link != null) {
-        ref.read(invitesProvider.notifier).updateInviteLink(
-              u.email,
-              link,
-              fullName: u.name,
-              role: u.role.name,
-              clinicId: currentUser.clinicId,
-            );
-      }
-      
-      // DO NOT invalidate here. Our manual update is faster and any subsequent 
-      // stream event will eventually confirm it from the DB.
+      // Force refresh of pending invites to instantly display the link
+      ref.invalidate(invitesProvider);
     } catch (e) {
       debugPrint('SystemUsersNotifier.addUser Error: $e');
       rethrow;
@@ -180,30 +169,9 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
     _sub?.cancel();
 
     if (user.clinicId.isNotEmpty) {
-      _sub = _repo.streamInvites(user.clinicId).listen((dataList) {
+      _sub = _repo.streamInvites(user.clinicId).listen((data) {
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
-          // PROTECTION: Optimistically merge stream data with our local knowledge
-          final merged = <UserInvite>[];
-          final incomingEmails = dataList.map((e) => e.email.toLowerCase()).toSet();
-          
-          // First, add all incoming data, preserving links from local state if DB is behind
-          for (final incoming in dataList) {
-            final localMatch = state.where((i) => i.email.toLowerCase() == incoming.email.toLowerCase()).firstOrNull;
-            if (localMatch != null && localMatch.actionLink != null && incoming.actionLink == null) {
-              merged.add(incoming.copyWith(actionLink: localMatch.actionLink));
-            } else {
-              merged.add(incoming);
-            }
-          }
-          
-          // Second, keep any synthetic ones that haven't hit the DB yet
-          for (final local in state) {
-            if (!incomingEmails.contains(local.email.toLowerCase())) {
-              merged.add(local);
-            }
-          }
-          
-          state = merged;
+          state = data;
         }
       });
     }
@@ -221,32 +189,6 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
       state = oldState;
       debugPrint('InvitesNotifier.cancelInvite Error: $e');
       rethrow;
-    }
-  }
-
-  void updateInviteLink(String email, String link, {String? fullName, String? role, String? clinicId}) {
-    final existingIdx = state.indexWhere((i) => i.email.toLowerCase() == email.toLowerCase());
-    if (existingIdx != -1) {
-      state = state.map((i) {
-        if (i.email.toLowerCase() == email.toLowerCase()) {
-          return i.copyWith(actionLink: link);
-        }
-        return i;
-      }).toList();
-    } else {
-      // If it's not in the state yet (stream delay), add a synthetic one
-      print('TRESSIA_DEBUG: Adding synthetic invite for $email');
-      final newInvite = UserInvite(
-        id: 'synthetic_${DateTime.now().millisecondsSinceEpoch}',
-        clinicId: clinicId ?? '',
-        email: email,
-        role: role ?? 'Therapist',
-        fullName: fullName ?? 'New Member',
-        actionLink: link,
-        createdBy: ref.read(currentUserProvider).id,
-        createdAt: DateTime.now(),
-      );
-      state = [...state, newInvite];
     }
   }
 

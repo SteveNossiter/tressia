@@ -109,7 +109,7 @@ serve(async (req) => {
     await supabaseAdmin
       .from('invites')
       .update({ action_link: actionLink })
-      .ilike('email', email)
+      .eq('email', email)
       .eq('clinic_id', clinicId);
 
     return new Response(JSON.stringify({ success: true, action_link: actionLink }), {

@@ -153,7 +153,7 @@ class _InviteCard extends ConsumerWidget {
                       },
                       icon: const Icon(Icons.copy, size: 14),
                       label: Text(
-                        'INVITE LINK',
+                        'COPY INVITE LINK',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -1114,13 +1114,11 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     ThemeData theme, {
     int maxLines = 1,
     TextInputType? keyboard,
-    void Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: keyboard,
-      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         filled: true,

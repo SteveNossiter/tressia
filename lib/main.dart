@@ -125,7 +125,7 @@ class _SetupGateState extends ConsumerState<SetupGate> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 12), () {
+    Future.delayed(const Duration(seconds: 6), () {
       if (mounted) {
         _runDiagnostics();
         setState(() => _timedOut = true);

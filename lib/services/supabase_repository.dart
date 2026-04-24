@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 import '../models/project_module.dart';
 import '../models/clinic_settings.dart';
-import '../main.dart';
 
 class SupabaseRepository {
   final SupabaseClient _client = Supabase.instance.client;
@@ -366,8 +365,8 @@ class SupabaseRepository {
           uri,
           headers: {
             'Content-Type': 'application/json',
-            'apiKey': supabaseAnonKey,
-            'Authorization': 'Bearer ${session.accessToken}',
+            'apiKey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmd3B2dnBwZG5weXJ2bm9jY25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODU3NTksImV4cCI6MjA5MDA2MTc1OX0.vzZM5Hiubg9KaxBmGfFfHy6m3vYE2X8dVSndHRfkLlA',
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmd3B2dnBwZG5weXJ2bm9jY25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODU3NTksImV4cCI6MjA5MDA2MTc1OX0.vzZM5Hiubg9KaxBmGfFfHy6m3vYE2X8dVSndHRfkLlA',
           },
           body: jsonEncode({
             'email': email,
@@ -386,11 +385,7 @@ class SupabaseRepository {
           final link = data['action_link'] as String;
           print('TRESSIA_DEBUG: Link generated: $link');
           
-          await _client
-              .from('invites')
-              .update({'action_link': link})
-              .ilike('email', email)
-              .eq('clinic_id', clinicId);
+          await _client.from('invites').update({'action_link': link}).eq('clinic_id', clinicId).eq('email', email);
           
           return link;
         } else {
