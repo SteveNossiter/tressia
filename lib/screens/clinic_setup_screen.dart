@@ -17,8 +17,10 @@ class ClinicSetupScreen extends ConsumerStatefulWidget {
 
 class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
   final _picker = ImagePicker();
-
   List<UserAssociation> _userAssociations = [];
+
+  late TextEditingController _nameCtrl, _descCtrl, _addressCtrl, _phoneCtrl, _emailCtrl;
+  late TextEditingController _userFirstNameCtrl, _userLastNameCtrl, _userPhoneCtrl, _userAddressCtrl, _userEmailCtrl;
 
   @override
   void initState() {
@@ -34,6 +36,9 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
 
     _userFirstNameCtrl = TextEditingController(text: user.firstName);
     _userLastNameCtrl = TextEditingController(text: user.lastName);
+    _userPhoneCtrl = TextEditingController(text: user.phone);
+    _userAddressCtrl = TextEditingController(text: user.address);
+    _userEmailCtrl = TextEditingController(text: user.email);
     _userAssociations = List.from(user.associations);
   }
 
@@ -91,6 +96,9 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
       // Save Personal Details
       await Supabase.instance.client.from('users').update({
         'full_name': '${_userFirstNameCtrl.text} ${_userLastNameCtrl.text}'.trim(),
+        'phone': _userPhoneCtrl.text.trim(),
+        'address': _userAddressCtrl.text.trim(),
+        'email': _userEmailCtrl.text.trim(),
         'associations': _userAssociations.map((e) => e.toJson()).toList(),
         'setup_complete': true,
       }).eq('id', currentUser.id);
@@ -180,6 +188,32 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
                           child: TextField(
                             controller: _userLastNameCtrl,
                             decoration: const InputDecoration(labelText: 'Last Name'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _userEmailCtrl,
+                      decoration: const InputDecoration(labelText: 'Personal / Work Email'),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _userPhoneCtrl,
+                            decoration: const InputDecoration(labelText: 'Phone Number'),
+                            keyboardType: TextInputType.phone,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: _userAddressCtrl,
+                            decoration: const InputDecoration(labelText: 'Residential Address'),
                           ),
                         ),
                       ],
