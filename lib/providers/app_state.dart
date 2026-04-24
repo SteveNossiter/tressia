@@ -130,10 +130,11 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
         fullName: u.name,
       );
       
-      print('TRESSIA_DEBUG: User invited, link generated: $link');
+      if (link != null) {
+        ref.read(invitesProvider.notifier).updateInviteLink(u.email, link);
+      }
       
-      // Wait briefly for Supabase to finish its background update before re-fetching
-      await Future.delayed(const Duration(milliseconds: 800));
+      // Still invalidate to ensure full sync with DB
       ref.invalidate(invitesProvider);
     } catch (e) {
       debugPrint('SystemUsersNotifier.addUser Error: $e');
@@ -194,6 +195,15 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
       debugPrint('InvitesNotifier.cancelInvite Error: $e');
       rethrow;
     }
+  }
+
+  void updateInviteLink(String email, String link) {
+    state = state.map((i) {
+      if (i.email.toLowerCase() == email.toLowerCase()) {
+        return i.copyWith(actionLink: link);
+      }
+      return i;
+    }).toList();
   }
 
   Future<void> regenerateInvite(UserInvite invite) async {
