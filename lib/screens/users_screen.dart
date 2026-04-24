@@ -153,7 +153,7 @@ class _InviteCard extends ConsumerWidget {
                       },
                       icon: const Icon(Icons.copy, size: 14),
                       label: Text(
-                        'COPY INVITE LINK',
+                        'INVITE LINK',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,

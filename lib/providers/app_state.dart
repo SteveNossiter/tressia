@@ -131,11 +131,17 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
       );
       
       if (link != null) {
-        ref.read(invitesProvider.notifier).updateInviteLink(u.email, link);
+        ref.read(invitesProvider.notifier).updateInviteLink(
+              u.email,
+              link,
+              fullName: u.name,
+              role: u.role.name,
+              clinicId: currentUser.clinicId,
+            );
       }
       
-      // Still invalidate to ensure full sync with DB
-      ref.invalidate(invitesProvider);
+      // DO NOT invalidate here. Our manual update is faster and any subsequent 
+      // stream event will eventually confirm it from the DB.
     } catch (e) {
       debugPrint('SystemUsersNotifier.addUser Error: $e');
       rethrow;
@@ -197,13 +203,30 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
     }
   }
 
-  void updateInviteLink(String email, String link) {
-    state = state.map((i) {
-      if (i.email.toLowerCase() == email.toLowerCase()) {
-        return i.copyWith(actionLink: link);
-      }
-      return i;
-    }).toList();
+  void updateInviteLink(String email, String link, {String? fullName, String? role, String? clinicId}) {
+    final existingIdx = state.indexWhere((i) => i.email.toLowerCase() == email.toLowerCase());
+    if (existingIdx != -1) {
+      state = state.map((i) {
+        if (i.email.toLowerCase() == email.toLowerCase()) {
+          return i.copyWith(actionLink: link);
+        }
+        return i;
+      }).toList();
+    } else {
+      // If it's not in the state yet (stream delay), add a synthetic one
+      print('TRESSIA_DEBUG: Adding synthetic invite for $email');
+      final newInvite = UserInvite(
+        id: 'synthetic_${DateTime.now().millisecondsSinceEpoch}',
+        clinicId: clinicId ?? '',
+        email: email,
+        role: role ?? 'Therapist',
+        fullName: fullName ?? 'New Member',
+        actionLink: link,
+        createdBy: ref.read(currentUserProvider).id,
+        createdAt: DateTime.now(),
+      );
+      state = [...state, newInvite];
+    }
   }
 
   Future<void> regenerateInvite(UserInvite invite) async {
