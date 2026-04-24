@@ -18,14 +18,7 @@ class ClinicSetupScreen extends ConsumerStatefulWidget {
 class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
   final _picker = ImagePicker();
 
-  late TextEditingController _nameCtrl;
-  late TextEditingController _descCtrl;
-  late TextEditingController _addressCtrl;
-  late TextEditingController _phoneCtrl;
-  late TextEditingController _emailCtrl;
-  late TextEditingController _userFirstNameCtrl;
-  late TextEditingController _userLastNameCtrl;
-  late TextEditingController _userAhpraCtrl;
+  List<UserAssociation> _userAssociations = [];
 
   @override
   void initState() {
@@ -41,7 +34,7 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
 
     _userFirstNameCtrl = TextEditingController(text: user.firstName);
     _userLastNameCtrl = TextEditingController(text: user.lastName);
-    _userAhpraCtrl = TextEditingController(text: user.ahpraNumber);
+    _userAssociations = List.from(user.associations);
   }
 
   Future<void> _pickLogo() async {
@@ -98,12 +91,12 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
       // Save Personal Details
       await Supabase.instance.client.from('users').update({
         'full_name': '${_userFirstNameCtrl.text} ${_userLastNameCtrl.text}'.trim(),
-        'ahpra_number': _userAhpraCtrl.text.trim(),
+        'associations': _userAssociations.map((e) => e.toJson()).toList(),
         'setup_complete': true,
       }).eq('id', currentUser.id);
 
-      // Save Clinic Details (if admin)
-      if (currentUser.isAdmin) {
+      // Save Clinic Details (if admin and NOT yet setup)
+      if (currentUser.isAdmin && !currentClinic.setupComplete) {
         await Supabase.instance.client.from('clinics').update({
           'name': _nameCtrl.text,
           'description': _descCtrl.text,
@@ -136,88 +129,163 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final currentUser = ref.watch(currentUserProvider);
-    final isAdmin = currentUser.isAdmin;
+    final currentClinic = ref.watch(clinicSettingsProvider);
+    
+    // Only show clinic section if user is admin AND clinic isn't finalised yet
+    final showClinicSection = currentUser.isAdmin && !currentClinic.setupComplete;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
+            backgroundColor: theme.scaffoldBackgroundColor,
+            elevation: 0,
             title: Text(
               'Initial Account Setup',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+              style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18),
             ),
             floating: true,
             actions: [
               TextButton(
                 onPressed: _logout,
-                child: Text('LOGOUT', style: GoogleFonts.outfit(color: Colors.red)),
+                child: Text('LOGOUT', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
           SliverList(
             delegate: SliverChildListDelegate([
               Padding(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // PERSONAL SECTION
                     _sectionHeader(theme, '1. Personal Profile'),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _userFirstNameCtrl,
-                      decoration: const InputDecoration(labelText: 'First Name'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _userLastNameCtrl,
-                      decoration: const InputDecoration(labelText: 'Last Name'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _userAhpraCtrl,
-                      decoration: const InputDecoration(labelText: 'AHPRA Number (if applicable)'),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _userFirstNameCtrl,
+                            decoration: const InputDecoration(labelText: 'First Name'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: _userLastNameCtrl,
+                            decoration: const InputDecoration(labelText: 'Last Name'),
+                          ),
+                        ),
+                      ],
                     ),
                     
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Professional Associations',
+                      style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: theme.hintColor),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    ..._userAssociations.asMap().entries.map((entry) {
+                      int idx = entry.key;
+                      var assoc = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: DropdownButtonFormField<String>(
+                                value: ['ANZACATA', 'PACFA', 'ACA', 'ACA (Level 1)', 'ACA (Level 2)', 'Other'].contains(assoc.name) ? assoc.name : 'Other',
+                                decoration: const InputDecoration(labelText: 'Association'),
+                                items: ['ANZACATA', 'PACFA', 'ACA', 'ACA (Level 1)', 'ACA (Level 2)', 'Other']
+                                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                    .toList(),
+                                onChanged: (v) {
+                                  if (v != null) {
+                                    setState(() {
+                                      _userAssociations[idx] = UserAssociation(name: v, membershipNumber: assoc.membershipNumber);
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: TextField(
+                                decoration: const InputDecoration(labelText: 'Membership #'),
+                                onChanged: (v) {
+                                  _userAssociations[idx] = UserAssociation(name: assoc.name, membershipNumber: v);
+                                },
+                                controller: TextEditingController(text: assoc.membershipNumber)..selection = TextSelection.fromPosition(TextPosition(offset: assoc.membershipNumber.length)),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
+                              onPressed: () => setState(() => _userAssociations.removeAt(idx)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _userAssociations.add(UserAssociation(name: 'ANZACATA', membershipNumber: ''));
+                        });
+                      },
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('ADD ASSOCIATION'),
+                    ),
 
-                    // CLINIC SECTION (Only for App Admins/Registrants)
-                    if (isAdmin) ...[
+                    if (showClinicSection) ...[
+                      const SizedBox(height: 48),
                       _sectionHeader(theme, '2. Clinic Identity'),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       TextField(
                         controller: _nameCtrl,
                         decoration: const InputDecoration(labelText: 'Clinic / Business Name'),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _descCtrl,
                         maxLines: 2,
                         decoration: const InputDecoration(labelText: 'Short Description'),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _addressCtrl,
                         decoration: const InputDecoration(labelText: 'Clinic Address'),
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _phoneCtrl,
-                        decoration: const InputDecoration(labelText: 'Contact Phone'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _emailCtrl,
-                        decoration: const InputDecoration(labelText: 'Public Email'),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _phoneCtrl,
+                              decoration: const InputDecoration(labelText: 'Contact Phone'),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextField(
+                              controller: _emailCtrl,
+                              decoration: const InputDecoration(labelText: 'Public Email'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
 
-                    const SizedBox(height: 64),
+                    const SizedBox(height: 56),
                     
                     SizedBox(
                       width: double.infinity,
@@ -227,6 +295,7 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: theme.primaryColor,
                           foregroundColor: Colors.white,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         child: Text(
@@ -235,7 +304,6 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
                         ),
                       ),
                     ),
-                    
                     const SizedBox(height: 100),
                   ],
                 ),

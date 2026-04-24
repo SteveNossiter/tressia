@@ -52,7 +52,7 @@ class CurrentUserNotifier extends Notifier<AppUser> {
       email: authUser?.email ?? '',
       phone: '',
       address: '',
-      ahpraNumber: '',
+      associations: const [],
       qualifications: '',
       notes: '',
       setupComplete: true, // assume true until loaded to avoid flash
@@ -233,6 +233,16 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
     } catch (_) {}
   }
 
+  // Parse associations
+  List<UserAssociation> assocList = [];
+  if (data['associations'] != null && data['associations'] is List) {
+    try {
+      assocList = (data['associations'] as List)
+          .map((item) => UserAssociation.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } catch (_) {}
+  }
+
   return AppUser(
     id: data['id'],
     clinicId: data['clinic_id'] ?? '',
@@ -245,7 +255,7 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
     phone: data['phone'] ?? '',
     address: data['address'] ?? '',
     base64Photo: data['photo'] ?? '',
-    ahpraNumber: data['ahpra_number'] ?? '',
+    associations: assocList,
     qualifications: data['qualifications'] ?? '',
     notes: data['notes'] ?? '',
     setupComplete: data['setup_complete'] ?? false,

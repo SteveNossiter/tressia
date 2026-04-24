@@ -39,7 +39,7 @@ CREATE TABLE public.users (
     address TEXT,
     photo TEXT, -- base64 profile photo
     user_color TEXT, -- hex color string e.g. '#ff9c27b0'
-    ahpra_number TEXT,
+    associations JSONB DEFAULT '[]',
     qualifications TEXT,
     notes TEXT,
     setup_complete BOOLEAN DEFAULT FALSE,

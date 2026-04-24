@@ -339,10 +339,10 @@ class _UserCard extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          if (user.ahpraNumber.isNotEmpty) ...[
+                          if (user.associations.isNotEmpty) ...[
                             const SizedBox(width: 8),
                             Text(
-                              'AHPRA: ${user.ahpraNumber}',
+                              '${user.associations.first.name}: ${user.associations.first.membershipNumber}',
                               style: GoogleFonts.outfit(
                                 fontSize: 10,
                                 color: theme.hintColor,
@@ -479,20 +479,11 @@ class UserProfileScreen extends ConsumerStatefulWidget {
 
 class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   bool _isEditing = false;
-  late TextEditingController _nameCtrl;
-  late TextEditingController _firstCtrl;
-  late TextEditingController _lastCtrl;
-  late TextEditingController _emailCtrl;
-  late TextEditingController _phoneCtrl;
-  late TextEditingController _addressCtrl;
-  late TextEditingController _ahpraCtrl;
-  late TextEditingController _qualCtrl;
-  late TextEditingController _notesCtrl;
-
+  late TextEditingController _nameCtrl, _firstCtrl, _lastCtrl, _emailCtrl, _phoneCtrl, _addressCtrl, _qualCtrl, _notesCtrl;
   late Color _selectedColor;
   final ImagePicker _imagePicker = ImagePicker();
-
   final List<Color> _colorPalette = OrganicPalette.colors;
+  List<UserAssociation> _assocList = [];
 
   @override
   void initState() {
@@ -503,7 +494,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     _emailCtrl = TextEditingController(text: widget.user.email);
     _phoneCtrl = TextEditingController(text: widget.user.phone);
     _addressCtrl = TextEditingController(text: widget.user.address);
-    _ahpraCtrl = TextEditingController(text: widget.user.ahpraNumber);
+    _assocList = List.from(widget.user.associations);
     _qualCtrl = TextEditingController(text: widget.user.qualifications);
     _notesCtrl = TextEditingController(text: widget.user.notes);
     _selectedColor = widget.user.userColor;
@@ -518,7 +509,6 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       _emailCtrl,
       _phoneCtrl,
       _addressCtrl,
-      _ahpraCtrl,
       _qualCtrl,
       _notesCtrl,
     ]) {
@@ -569,7 +559,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
         'email': _emailCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
-        'ahpra_number': _ahpraCtrl.text.trim(),
+        'associations': _assocList.map((e) => e.toJson()).toList(),
         'qualifications': _qualCtrl.text.trim(),
         'notes': _notesCtrl.text.trim(),
         'user_color': '#${_selectedColor.value.toRadixString(16).padLeft(8, '0')}',
@@ -622,7 +612,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
       _emailCtrl.text = user.email;
       _phoneCtrl.text = user.phone;
       _addressCtrl.text = user.address;
-      _ahpraCtrl.text = user.ahpraNumber;
+      _assocList = List.from(user.associations);
       _qualCtrl.text = user.qualifications;
       _notesCtrl.text = user.notes;
       _selectedColor = user.userColor;
@@ -779,8 +769,51 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
               _field('Address', _addressCtrl, theme),
               const SizedBox(height: 16),
               _sectionTitle('Professional', theme),
-              const SizedBox(height: 8),
-              _field('AHPRA Number', _ahpraCtrl, theme),
+              const SizedBox(height: 12),
+              ..._assocList.asMap().entries.map((entry) {
+                int idx = entry.key;
+                var assoc = entry.value;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: DropdownButtonFormField<String>(
+                          value: ['ANZACATA', 'PACFA', 'ACA', 'ACA (Level 1)', 'ACA (Level 2)', 'AHPRA', 'Other'].contains(assoc.name) ? assoc.name : 'Other',
+                          decoration: const InputDecoration(labelText: 'Association'),
+                          items: ['ANZACATA', 'PACFA', 'ACA', 'ACA (Level 1)', 'ACA (Level 2)', 'AHPRA', 'Other']
+                              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                              .toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() {
+                                _assocList[idx] = UserAssociation(name: v, membershipNumber: assoc.membershipNumber);
+                              });
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 3,
+                        child: _field('Membership #', TextEditingController(text: assoc.membershipNumber)..selection = TextSelection.fromPosition(TextPosition(offset: assoc.membershipNumber.length)), theme, onChanged: (v) {
+                          _assocList[idx] = UserAssociation(name: assoc.name, membershipNumber: v);
+                        }),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
+                        onPressed: () => setState(() => _assocList.removeAt(idx)),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              TextButton.icon(
+                onPressed: () => setState(() => _assocList.add(UserAssociation(name: 'ANZACATA', membershipNumber: ''))),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('ADD ASSOCIATION'),
+              ),
               const SizedBox(height: 10),
               _field('Qualifications', _qualCtrl, theme),
               const SizedBox(height: 10),
@@ -867,8 +900,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
                   DateFormat('d MMM yyyy').format(user.startDate!),
                   theme,
                 ),
-              if (user.ahpraNumber.isNotEmpty)
-                _infoRow(Icons.verified_user, 'AHPRA', user.ahpraNumber, theme),
+              ...user.associations.map((a) => _infoRow(Icons.verified_user, a.name, a.membershipNumber, theme)),
               if (user.twoFactorEnabled)
                 _infoRow(Icons.security, '2FA', 'Enabled ✓', theme),
 

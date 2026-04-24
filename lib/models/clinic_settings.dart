@@ -12,8 +12,25 @@ import 'package:flutter/material.dart';
 enum UserRole { admin, administrator, therapist }
 
 // =============================================
-// APP USER — Full profile with AHPRA-compliant fields
+// APP USER — Full profile with professional memberships
 // =============================================
+class UserAssociation {
+  final String name;
+  final String membershipNumber;
+
+  UserAssociation({required this.name, required this.membershipNumber});
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'membershipNumber': membershipNumber,
+      };
+
+  factory UserAssociation.fromJson(Map<String, dynamic> json) => UserAssociation(
+        name: json['name'] as String,
+        membershipNumber: json['membershipNumber'] as String,
+      );
+}
+
 class AppUser {
   final String id;
   final String clinicId;
@@ -31,7 +48,7 @@ class AppUser {
 
   // Professional
   final DateTime? startDate; // Employment start
-  final String ahpraNumber; // AHPRA registration # (therapists)
+  final List<UserAssociation> associations; 
   final String qualifications;
   final String notes;
 
@@ -53,7 +70,7 @@ class AppUser {
     this.address = '',
     this.base64Photo,
     this.startDate,
-    this.ahpraNumber = '',
+    this.associations = const [],
     this.qualifications = '',
     this.notes = '',
     this.passwordHash = '',
@@ -89,7 +106,7 @@ class AppUser {
     String? address,
     String? base64Photo,
     DateTime? startDate,
-    String? ahpraNumber,
+    List<UserAssociation>? associations,
     String? qualifications,
     String? notes,
     String? passwordHash,
@@ -109,7 +126,7 @@ class AppUser {
         address: address ?? this.address,
         base64Photo: base64Photo ?? this.base64Photo,
         startDate: startDate ?? this.startDate,
-        ahpraNumber: ahpraNumber ?? this.ahpraNumber,
+        associations: associations ?? this.associations,
         qualifications: qualifications ?? this.qualifications,
         notes: notes ?? this.notes,
         passwordHash: passwordHash ?? this.passwordHash,
