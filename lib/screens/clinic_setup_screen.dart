@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/app_state.dart';
 import '../widgets/dialogs/user_creator.dart';
 import '../widgets/dialogs/glass_dialog.dart';
+import '../models/clinic_settings.dart';
 
 class ClinicSetupScreen extends ConsumerStatefulWidget {
   const ClinicSetupScreen({super.key});
