@@ -28,12 +28,12 @@ class CurrentUserNotifier extends Notifier<AppUser> {
       _sub = Supabase.instance.client
           .from('users')
           .stream(primaryKey: ['id'])
-          .eq('id', authUser.id)
           .listen((data) {
             if (data.isNotEmpty &&
                 Supabase.instance.client.auth.currentUser?.id == authUser.id) {
-              final row = data.first;
-              state = _mapToAppUser(row);
+              // Local filtering to avoid PostgREST cache issues with .eq() on stream occasionally
+              final row = data.firstWhere((r) => r['id'] == authUser.id, orElse: () => {});
+              if (row.isNotEmpty) state = _mapToAppUser(row);
             }
           });
     }
@@ -102,10 +102,10 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
       _sub = Supabase.instance.client
           .from('users')
           .stream(primaryKey: ['id'])
-          .eq('clinic_id', user.clinicId)
           .listen((dataList) {
             if (ref.read(currentUserProvider).clinicId == user.clinicId) {
-              state = dataList.map(_mapToAppUser).toList();
+              final filtered = dataList.where((r) => r['clinic_id'] == user.clinicId).toList();
+              state = filtered.map(_mapToAppUser).toList();
             }
           });
     }
