@@ -180,9 +180,30 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
     _sub?.cancel();
 
     if (user.clinicId.isNotEmpty) {
-      _sub = _repo.streamInvites(user.clinicId).listen((data) {
+      _sub = _repo.streamInvites(user.clinicId).listen((dataList) {
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
-          state = data;
+          // PROTECTION: Optimistically merge stream data with our local knowledge
+          final merged = <UserInvite>[];
+          final incomingEmails = dataList.map((e) => e.email.toLowerCase()).toSet();
+          
+          // First, add all incoming data, preserving links from local state if DB is behind
+          for (final incoming in dataList) {
+            final localMatch = state.where((i) => i.email.toLowerCase() == incoming.email.toLowerCase()).firstOrNull;
+            if (localMatch != null && localMatch.actionLink != null && incoming.actionLink == null) {
+              merged.add(incoming.copyWith(actionLink: localMatch.actionLink));
+            } else {
+              merged.add(incoming);
+            }
+          }
+          
+          // Second, keep any synthetic ones that haven't hit the DB yet
+          for (final local in state) {
+            if (!incomingEmails.contains(local.email.toLowerCase())) {
+              merged.add(local);
+            }
+          }
+          
+          state = merged;
         }
       });
     }

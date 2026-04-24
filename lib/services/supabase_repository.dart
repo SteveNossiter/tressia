@@ -385,7 +385,11 @@ class SupabaseRepository {
           final link = data['action_link'] as String;
           print('TRESSIA_DEBUG: Link generated: $link');
           
-          await _client.from('invites').update({'action_link': link}).eq('clinic_id', clinicId).eq('email', email);
+          await _client
+              .from('invites')
+              .update({'action_link': link})
+              .ilike('email', email)
+              .eq('clinic_id', clinicId);
           
           return link;
         } else {
