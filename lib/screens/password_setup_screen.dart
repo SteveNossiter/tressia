@@ -31,15 +31,13 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
     });
 
     try {
-      // 1. First properly confirm password change natively with Supabase Auth
+      // 1. First properly set the password natively with Supabase Auth
+      // We do NOT clear needs_password_setup yet, so the screen stays locked on this view
       await Supabase.instance.client.auth.updateUser(
-        UserAttributes(
-          password: _passwordController.text,
-          data: {'needs_password_setup': false},
-        ),
+        UserAttributes(password: _passwordController.text),
       );
 
-      // 2. Safely trigger Edge Function to process invite -> user transfer securely across servers!
+      // 2. Trigger Edge Function to process invite -> user transfer
       final String jwt = Supabase.instance.client.auth.currentSession?.accessToken ?? '';
       final res = await Supabase.instance.client.functions.invoke(
         'accept-invite',
@@ -47,27 +45,43 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
       );
 
       if (res.status != 200) {
-        throw Exception('Failed to migrate invite credentials: ${res.data}');
+        throw Exception('Failed to finalize server-side account: ${res.data}');
       }
 
+      // 3. WAIT SCREEN: Poll the database until the public.users record is active
+      // This prevents the "blank screen" or "profile not found" error during cloud sync
+      bool userCreated = false;
+      int attempts = 0;
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+
+      while (!userCreated && attempts < 10) {
+        attempts++;
+        final check = await Supabase.instance.client
+            .from('users')
+            .select('id')
+            .eq('id', userId ?? '')
+            .maybeSingle();
+        
+        if (check != null) {
+          userCreated = true;
+          break;
+        }
+        // Wait 2 seconds before retrying
+        await Future.delayed(const Duration(seconds: 2));
+      }
+
+      if (!userCreated) {
+        throw Exception('Server sync is taking longer than expected. Please try again in 1 minute.');
+      }
+
+      // 4. FINAL HANDSHAKE: Clear the setup flag now that the DB is ready
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(data: {'needs_password_setup': false}),
+      );
+
       if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Password Created!'),
-            content: const Text('Your secure account has been finalized. Please log in with your new credentials to complete your profile at the Dashboard.'),
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  await Supabase.instance.client.auth.signOut();
-                  // AuthGate will naturally pop them to login screen
-                  if (mounted) Navigator.pop(ctx);
-                },
-                child: const Text('LOG IN NOW'),
-              ),
-            ],
-          ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account successfully activated! Welcome to Tressia.')),
         );
       }
 
@@ -168,7 +182,21 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'FINALISING YOUR ACCOUNT...',
+                                  style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ],
+                            )
                           : Text('SAVE PASSWORD', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
                     ),
                   ),
