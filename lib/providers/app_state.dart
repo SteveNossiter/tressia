@@ -123,13 +123,17 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
     final currentUser = ref.read(currentUserProvider);
     if (currentUser.clinicId.isEmpty) return;
     try {
-      await _repo.inviteUser(
+      final link = await _repo.inviteUser(
         email: u.email,
         role: u.role.name,
         clinicId: currentUser.clinicId,
         fullName: u.name,
       );
-      // Force refresh of pending invites to instantly display the link
+      
+      print('TRESSIA_DEBUG: User invited, link generated: $link');
+      
+      // Wait briefly for Supabase to finish its background update before re-fetching
+      await Future.delayed(const Duration(milliseconds: 800));
       ref.invalidate(invitesProvider);
     } catch (e) {
       debugPrint('SystemUsersNotifier.addUser Error: $e');
