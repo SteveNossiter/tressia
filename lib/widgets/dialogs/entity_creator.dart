@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/project_module.dart';
+import '../../models/clinic_settings.dart';
 import '../../providers/app_state.dart';
 import '../../theme/organic_palette.dart';
 import '../multi_select_dropdown.dart';
@@ -15,13 +16,13 @@ class EntityCreator extends ConsumerStatefulWidget {
   final String? initialClientId;
 
   const EntityCreator({
-    Key? key,
+    super.key,
     this.initialEntityType,
     this.initialParentPhaseId,
     this.initialParentTaskId,
     this.initialClientId,
     this.hideClientCourse = false,
-  }) : super(key: key);
+  });
 
   final bool hideClientCourse;
 
@@ -44,6 +45,7 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   Color _color = const Color(0xFF38BDF8);
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -51,6 +53,12 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
     _entityType = widget.initialEntityType ?? 'Task';
     _parentPhaseId = widget.initialParentPhaseId;
     _parentTaskId = widget.initialParentTaskId;
+
+    // Automatic self-assignment for therapists
+    final currentUser = ref.read(currentUserProvider);
+    if (currentUser.role == UserRole.therapist) {
+      _assignedTherapistIds = [currentUser.id];
+    }
 
     // Default color if parent task is known
     _updateDefaultColorAndDates();
@@ -62,9 +70,6 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
       final pTask = tasks.where((t) => t.id == _parentTaskId).firstOrNull;
       if (pTask != null) {
         _color = pTask.color;
-        // Adjust dates to parent bounds if current ones are outside
-        if (_startDate.isBefore(pTask.startDate)) _startDate = pTask.startDate;
-        if (_endDate.isAfter(pTask.endDate)) _endDate = pTask.endDate;
       }
     }
   }
@@ -93,42 +98,21 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
   }
 
   Future<void> _pickDate(bool isStart) async {
-    DateTime first = DateTime(2020);
-    DateTime last = DateTime(2035);
-
-    // Enforce bounds if subtask
-    if (_entityType == 'Subtask' && _parentTaskId != null) {
-      final pTask = ref
-          .read(tasksProvider)
-          .where((t) => t.id == _parentTaskId)
-          .firstOrNull;
-      if (pTask != null) {
-        first = pTask.startDate;
-        last = pTask.endDate;
-      }
-    }
-
     final pd = await showDatePicker(
       context: context,
-      initialDate: (isStart ? _startDate : _endDate).isBefore(first)
-          ? first
-          : ((isStart ? _startDate : _endDate).isAfter(last)
-                ? last
-                : (isStart ? _startDate : _endDate)),
-      firstDate: first,
-      lastDate: last,
-      selectableDayPredicate: (day) {
-        // Option to grey out unavailable dates is implicit in firstDate/lastDate
-        return true;
-      },
+      initialDate: isStart ? _startDate : _endDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
     );
-    if (pd != null)
+    if (pd != null) {
       setState(() {
-        if (isStart)
+        if (isStart) {
           _startDate = pd;
-        else
+        } else {
           _endDate = pd;
+        }
       });
+    }
   }
 
   Future<void> _pickTime(bool isStart) async {
@@ -138,22 +122,198 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
           (isStart ? _startTime : _endTime) ??
           const TimeOfDay(hour: 9, minute: 0),
     );
-    if (t != null)
+    if (t != null) {
       setState(() {
-        if (isStart)
+        if (isStart) {
           _startTime = t;
-        else
+        } else {
           _endTime = t;
+        }
       });
+    }
+  }
+
+  /// Checks if child dates exceed parent bounds and shows a confirmation dialog.
+  /// Returns true if the save should proceed (dates are fine or user confirmed auto-extend).
+  Future<bool> _validateAndExtendParentDates() async {
+    final isTask = _entityType == 'Task';
+    final isSubtask = _entityType == 'Subtask';
+    if (!isTask && !isSubtask) return true;
+
+    final projects = ref.read(projectsProvider);
+    final tasks = ref.read(tasksProvider);
+
+    if (isTask && _parentPhaseId != null) {
+      // Task → check against parent project
+      final parentProject = projects.where((p) => p.id == _parentPhaseId).firstOrNull;
+      if (parentProject == null) return true;
+
+      final startBefore = _startDate.isBefore(parentProject.startDate);
+      final endAfter = _endDate.isAfter(parentProject.endDate);
+
+      if (startBefore || endAfter) {
+        final confirmed = await _showDateBoundaryDialog(
+          parentType: 'project',
+          parentName: parentProject.title,
+          parentStart: parentProject.startDate,
+          parentEnd: parentProject.endDate,
+          childStart: _startDate,
+          childEnd: _endDate,
+        );
+        if (!confirmed) return false;
+
+        // Auto-extend project dates
+        final newStart = startBefore ? _startDate : parentProject.startDate;
+        final newEnd = endAfter ? _endDate : parentProject.endDate;
+        ref.read(projectsProvider.notifier).updateProject(
+          parentProject.copyWith(startDate: newStart, endDate: newEnd),
+        );
+      }
+    } else if (isSubtask && _parentTaskId != null) {
+      // Subtask → check against parent task, then grandparent project
+      final parentTask = tasks.where((t) => t.id == _parentTaskId).firstOrNull;
+      if (parentTask == null) return true;
+
+      final startBefore = _startDate.isBefore(parentTask.startDate);
+      final endAfter = _endDate.isAfter(parentTask.endDate);
+
+      if (startBefore || endAfter) {
+        final confirmed = await _showDateBoundaryDialog(
+          parentType: 'task',
+          parentName: parentTask.title,
+          parentStart: parentTask.startDate,
+          parentEnd: parentTask.endDate,
+          childStart: _startDate,
+          childEnd: _endDate,
+        );
+        if (!confirmed) return false;
+
+        // Auto-extend task dates
+        final newTaskStart = startBefore ? _startDate : parentTask.startDate;
+        final newTaskEnd = endAfter ? _endDate : parentTask.endDate;
+        ref.read(tasksProvider.notifier).updateTask(
+          parentTask.copyWith(startDate: newTaskStart, endDate: newTaskEnd),
+        );
+
+        // Now check if the extended task dates exceed the grandparent project
+        final grandparentProject = projects.where((p) => p.id == parentTask.projectId).firstOrNull;
+        if (grandparentProject != null) {
+          final gpStartBefore = newTaskStart.isBefore(grandparentProject.startDate);
+          final gpEndAfter = newTaskEnd.isAfter(grandparentProject.endDate);
+          if (gpStartBefore || gpEndAfter) {
+            ref.read(projectsProvider.notifier).updateProject(
+              grandparentProject.copyWith(
+                startDate: gpStartBefore ? newTaskStart : grandparentProject.startDate,
+                endDate: gpEndAfter ? newTaskEnd : grandparentProject.endDate,
+              ),
+            );
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  Future<bool> _showDateBoundaryDialog({
+    required String parentType,
+    required String parentName,
+    required DateTime parentStart,
+    required DateTime parentEnd,
+    required DateTime childStart,
+    required DateTime childEnd,
+  }) async {
+    final df = DateFormat('d MMM yyyy');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Dates exceed $parentType',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The dates you selected fall outside the parent $parentType "$parentName":',
+              style: GoogleFonts.outfit(),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Parent $parentType dates:',
+                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '${df.format(parentStart)}  →  ${df.format(parentEnd)}',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your selected dates:',
+                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '${df.format(childStart)}  →  ${df.format(childEnd)}',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Proceeding will automatically extend the $parentType dates to accommodate this item.',
+              style: GoogleFonts.outfit(
+                fontStyle: FontStyle.italic,
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Go Back'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700]),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Extend & Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   Future<void> _save() async {
-    if (_titleCtrl.text.isEmpty) return;
+    if (_titleCtrl.text.isEmpty || _isSaving) return;
+    setState(() => _isSaving = true);
+
     final isClientCourse = _entityType == 'Client Course';
     final isProject = _entityType == 'Project';
     final isSession = _entityType == 'Session';
     final isTask = _entityType == 'Task';
     final isSubtask = _entityType == 'Subtask';
+
+    // Validate date boundaries for tasks/subtasks
+    if (isTask || isSubtask) {
+      final proceed = await _validateAndExtendParentDates();
+      if (!proceed) {
+        if (mounted) setState(() => _isSaving = false);
+        return;
+      }
+    }
 
     try {
       if (isClientCourse || isProject) {
@@ -310,6 +470,7 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
         : tasks;
 
     bool canSave =
+        !_isSaving &&
         _titleCtrl.text.isNotEmpty &&
         (isTopLevel ||
             (isTask && _parentPhaseId != null) ||
@@ -503,14 +664,16 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                   if (isTask || isSubtask || _entityType == 'Session')
                     const SizedBox(height: 12),
 
-                  // Assign Therapist
-                  MultiSelectDropdown(
-                    title: 'Assign Therapist / Admin',
-                    users: ref.watch(systemUsersProvider),
-                    selectedIds: _assignedTherapistIds,
-                    onChanged: (v) => setState(() => _assignedTherapistIds = v),
-                  ),
-                  const SizedBox(height: 12),
+                  // Assign Therapist (hidden for therapists, only admins can reassign)
+                  if (ref.read(currentUserProvider).role != UserRole.therapist) ...[
+                    MultiSelectDropdown(
+                      title: 'Assign Therapist / Admin',
+                      users: ref.watch(systemUsersProvider),
+                      selectedIds: _assignedTherapistIds,
+                      onChanged: (v) => setState(() => _assignedTherapistIds = v),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // Dates
                   Row(
@@ -664,7 +827,7 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      ..._palette.take(9).map(
+                      ..._palette.map(
                             (c) => GestureDetector(
                               onTap: () => setState(() => _color = c),
                               child: AnimatedContainer(
@@ -691,29 +854,6 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                               ),
                             ),
                           ),
-                      // Custom color button
-                      GestureDetector(
-                        onTap: _showColorPicker,
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: theme.dividerColor.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                            border: !_palette.any((pc) => pc.value == _color.value)
-                                ? Border.all(
-                                    color: theme.colorScheme.onSurface,
-                                    width: 2,
-                                  )
-                                : null,
-                          ),
-                          child: Icon(
-                            Icons.colorize,
-                            size: 16,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -745,7 +885,12 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
                     foregroundColor: Colors.white,
                     elevation: 0,
                   ),
-                  child: Text('Add $_entityType'),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 18, height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text('Add $_entityType'),
                 ),
               ),
             ],

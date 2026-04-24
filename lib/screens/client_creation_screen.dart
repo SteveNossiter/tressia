@@ -223,7 +223,7 @@ class _ClientCreationScreenState extends ConsumerState<ClientCreationScreen> {
         border: Border.all(
           color: c.isPrimary
               ? theme.primaryColor
-              : theme.dividerColor.withOpacity(0.1),
+              : theme.dividerColor.withValues(alpha: 0.1),
         ),
       ),
       child: Column(

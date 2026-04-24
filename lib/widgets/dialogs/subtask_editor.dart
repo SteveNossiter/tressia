@@ -10,7 +10,7 @@ import '../multi_select_dropdown.dart';
 
 class SubtaskEditor extends ConsumerStatefulWidget {
   final Subtask subtask;
-  const SubtaskEditor({Key? key, required this.subtask}) : super(key: key);
+  const SubtaskEditor({super.key, required this.subtask});
 
   @override
   _SubtaskEditorState createState() => _SubtaskEditorState();
@@ -77,16 +77,143 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
       if (pt != null) {
         final newDate = DateTime(pd.year, pd.month, pd.day, pt.hour, pt.minute);
         setState(() {
-          if (isStart)
+          if (isStart) {
             _startDate = newDate;
-          else
+          } else {
             _endDate = newDate;
+          }
         });
       }
     }
   }
 
-  void _save() {
+  Future<bool> _showDateBoundaryDialog({
+    required String parentType,
+    required String parentName,
+    required DateTime parentStart,
+    required DateTime parentEnd,
+    required DateTime childStart,
+    required DateTime childEnd,
+  }) async {
+    final df = DateFormat('d MMM yyyy');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Dates exceed $parentType',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The dates you selected fall outside the parent $parentType "$parentName":',
+              style: GoogleFonts.outfit(),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Parent $parentType dates:',
+                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '${df.format(parentStart)}  →  ${df.format(parentEnd)}',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your selected dates:',
+                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '${df.format(childStart)}  →  ${df.format(childEnd)}',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Proceeding will automatically extend the $parentType dates to accommodate this subtask.',
+              style: GoogleFonts.outfit(
+                fontStyle: FontStyle.italic,
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Go Back'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700]),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Extend & Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _save() async {
+    // Validate dates against parent task
+    final tasks = ref.read(tasksProvider);
+    final parentTask = tasks.where((t) => t.id == widget.subtask.taskId).firstOrNull;
+
+    if (parentTask != null) {
+      final startBefore = _startDate.isBefore(parentTask.startDate);
+      final endAfter = _endDate.isAfter(parentTask.endDate);
+
+      if (startBefore || endAfter) {
+        final confirmed = await _showDateBoundaryDialog(
+          parentType: 'task',
+          parentName: parentTask.title,
+          parentStart: parentTask.startDate,
+          parentEnd: parentTask.endDate,
+          childStart: _startDate,
+          childEnd: _endDate,
+        );
+        if (!confirmed) return;
+
+        // Auto-extend task dates
+        final newTaskStart = startBefore ? _startDate : parentTask.startDate;
+        final newTaskEnd = endAfter ? _endDate : parentTask.endDate;
+        ref.read(tasksProvider.notifier).updateTask(
+          parentTask.copyWith(startDate: newTaskStart, endDate: newTaskEnd),
+        );
+
+        // Also check grandparent project
+        final projects = ref.read(projectsProvider);
+        final grandparentProject = projects.where((p) => p.id == parentTask.projectId).firstOrNull;
+        if (grandparentProject != null) {
+          final gpStartBefore = newTaskStart.isBefore(grandparentProject.startDate);
+          final gpEndAfter = newTaskEnd.isAfter(grandparentProject.endDate);
+          if (gpStartBefore || gpEndAfter) {
+            ref.read(projectsProvider.notifier).updateProject(
+              grandparentProject.copyWith(
+                startDate: gpStartBefore ? newTaskStart : grandparentProject.startDate,
+                endDate: gpEndAfter ? newTaskEnd : grandparentProject.endDate,
+              ),
+            );
+          }
+        }
+      }
+    }
+
     final upd = widget.subtask.copyWith(
       title: _titleCtrl.text,
       description: _descCtrl.text,
@@ -225,8 +352,8 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
                       decoration: InputDecoration(
                         labelText: 'Subtask Title',
                         filled: true,
-                        fillColor: theme.scaffoldBackgroundColor.withOpacity(
-                          0.5,
+                        fillColor: theme.scaffoldBackgroundColor.withValues(
+                          alpha: 0.5,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -241,8 +368,8 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
                       decoration: InputDecoration(
                         labelText: 'Description',
                         filled: true,
-                        fillColor: theme.scaffoldBackgroundColor.withOpacity(
-                          0.5,
+                        fillColor: theme.scaffoldBackgroundColor.withValues(
+                          alpha: 0.5,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -327,7 +454,7 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        ..._palette.take(9).map(
+                        ..._palette.map(
                               (c) => GestureDetector(
                                 onTap: () => setState(() => _color = c),
                                 child: AnimatedContainer(
@@ -354,28 +481,6 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
                                 ),
                               ),
                             ),
-                        GestureDetector(
-                          onTap: _showColorPicker,
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: theme.dividerColor.withValues(alpha: 0.1),
-                              shape: BoxShape.circle,
-                              border: _color != null && !_palette.any((pc) => pc.value == _color!.value)
-                                  ? Border.all(
-                                      color: theme.colorScheme.onSurface,
-                                      width: 2,
-                                    )
-                                  : null,
-                            ),
-                            child: Icon(
-                              Icons.colorize,
-                              size: 16,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -480,7 +585,7 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor.withOpacity(0.5),
+          color: theme.scaffoldBackgroundColor.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -523,7 +628,7 @@ class _SubtaskEditorState extends ConsumerState<SubtaskEditor> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: theme.primaryColor.withOpacity(0.7)),
+          Icon(icon, size: 18, color: theme.primaryColor.withValues(alpha: 0.7)),
           const SizedBox(width: 12),
           SizedBox(
             width: 80,

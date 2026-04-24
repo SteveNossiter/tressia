@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/project_module.dart';
+import '../../models/clinic_settings.dart';
 import '../../providers/app_state.dart';
 import '../../screens/client_profile_screen.dart';
 import '../../theme/organic_palette.dart';
@@ -14,7 +15,7 @@ import '../multi_select_dropdown.dart';
 
 class PhaseEditor extends ConsumerStatefulWidget {
   final Project project;
-  const PhaseEditor({Key? key, required this.project}) : super(key: key);
+  const PhaseEditor({super.key, required this.project});
 
   @override
   _PhaseEditorState createState() => _PhaseEditorState();
@@ -141,21 +142,23 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
     final allSubs = subtasks
         .where((s) => tasks.any((t) => t.id == s.taskId))
         .toList();
-    final hasIncomplete =
-        tasks.any((t) => t.status != TaskStatus.done) ||
-        allSubs.any((s) => s.status != TaskStatus.done);
+
+    // Build list of active (outstanding) items
+    List<String> activeItems = [];
+    for (final t in tasks) {
+      if (t.status != TaskStatus.done) {
+        activeItems.add('Task: ${t.title}');
+      }
+      final tSubs = allSubs.where((s) => s.taskId == t.id);
+      for (final s in tSubs) {
+        if (s.status != TaskStatus.done) {
+          activeItems.add('  ↳ Subtask: ${s.title}');
+        }
+      }
+    }
 
     final isProfile = widget.project.clientType.startsWith('Profile:');
     final titleString = isProfile ? 'Full Client Profile' : 'Client Course';
-    
-    String message;
-    if (isProfile) {
-      message = 'CAUTION: This will permanently delete the entire profile for "${widget.project.clientName}", including all their demographic details and clinical associations. This cannot be undone.\n\nAre you absolutely sure?';
-    } else if (hasIncomplete) {
-      message = 'You still have incomplete tasks and subtasks in this client course/project.\n\nAre you sure you want to delete "${widget.project.title}" and all associated items?';
-    } else {
-      message = 'Are you sure you want to delete "${widget.project.title}"?';
-    }
 
     showDialog(
       context: context,
@@ -164,7 +167,45 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
           'Delete $titleString',
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: isProfile ? Colors.red : null),
         ),
-        content: Text(message, style: GoogleFonts.outfit()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isProfile) ...[
+              Text(
+                'CAUTION: This will permanently delete the entire profile for "${widget.project.clientName}", including all their demographic details and clinical associations. This cannot be undone.',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Text('Are you absolutely sure?', style: GoogleFonts.outfit()),
+            ] else ...[
+              if (activeItems.isNotEmpty) ...[
+                Text(
+                  'The following items are still active:',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: activeItems.map((o) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(o, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w500)),
+                      )).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                'Are you sure you want to delete "${widget.project.title}" and all associated items?',
+                style: GoogleFonts.outfit(),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -234,6 +275,7 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
     final subtasks = ref.watch(subtasksProvider);
     final users = ref.watch(systemUsersProvider);
     final clientTypes = ref.watch(clientTypesProvider);
+    final currentUser = ref.watch(currentUserProvider);
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -349,15 +391,17 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
                       _field('NDIS Number', _ndisCtrl, theme),
                     ],
                     const SizedBox(height: 10),
-                    MultiSelectDropdown(
-                      title: 'Assigned Therapist(s)',
-                      users: users,
-                      selectedIds: _assignedTherapistIds,
-                      onChanged: (v) {
-                        setState(() => _assignedTherapistIds = v);
-                      },
-                    ),
-                    const SizedBox(height: 10),
+                    if (currentUser.role != UserRole.therapist) ...[
+                      MultiSelectDropdown(
+                        title: 'Assigned Therapist(s)',
+                        users: users,
+                        selectedIds: _assignedTherapistIds,
+                        onChanged: (v) {
+                          setState(() => _assignedTherapistIds = v);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     _field('Notes', _notesCtrl, theme, maxLines: 3),
                     const SizedBox(height: 12),
                     Row(
@@ -394,7 +438,7 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        ..._palette.take(9).map(
+                        ..._palette.map(
                               (c) => GestureDetector(
                                 onTap: () => setState(() => _color = c),
                                 child: AnimatedContainer(
@@ -421,28 +465,6 @@ class _PhaseEditorState extends ConsumerState<PhaseEditor> {
                                 ),
                               ),
                             ),
-                        GestureDetector(
-                          onTap: _showColorPicker,
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: theme.dividerColor.withValues(alpha: 0.1),
-                              shape: BoxShape.circle,
-                              border: !_palette.any((pc) => pc.value == _color.value)
-                                  ? Border.all(
-                                      color: theme.colorScheme.onSurface,
-                                      width: 2,
-                                    )
-                                  : null,
-                            ),
-                            child: Icon(
-                              Icons.colorize,
-                              size: 16,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 20),

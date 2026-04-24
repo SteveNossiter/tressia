@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-tressia-token',
 }
 
 serve(async (req) => {
@@ -13,7 +13,27 @@ serve(async (req) => {
   }
 
   try {
-    const { email, role, clinicId, fullName } = await req.json()
+    const url = new URL(req.url)
+    const userToken = url.searchParams.get('token') || req.headers.get('X-Tressia-Token') || req.headers.get('Authorization')?.split(' ')[1]
+    const body = await req.json()
+    const { email, role, clinicId, fullName, redirectTo } = body
+
+    if (!userToken) {
+      return new Response(JSON.stringify({ error: 'Missing authentication token' }), { status: 401, headers: corsHeaders })
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: `Bearer ${userToken}` } } }
+    )
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    if (userError || !user) {
+      console.error(`TRESSIA_DEBUG_ERROR: Auth failure: ${userError?.message}`);
+      return new Response(JSON.stringify({ error: 'Unauthorized user token' }), { status: 401, headers: corsHeaders })
+    }
+
     console.log(`TRESSIA_DEBUG: Inviting ${fullName} (${email}) as ${role} for clinic ${clinicId}`);
 
     // Create Admin Client (Uses service role to bypass RLS)
@@ -27,7 +47,7 @@ serve(async (req) => {
       type: 'invite',
       email: email,
       options: {
-        redirectTo: 'https://tressia.pages.dev/',
+        redirectTo: redirectTo ?? 'https://tressia.pages.dev/',
         data: { 
           role: role,
           clinic_id: clinicId,

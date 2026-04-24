@@ -9,13 +9,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clinic_settings.dart';
 import '../models/project_module.dart';
 import '../providers/app_state.dart';
+import '../theme/organic_palette.dart';
 import '../widgets/dialogs/glass_dialog.dart';
 import '../widgets/dialogs/user_creator.dart';
 import '../services/supabase_repository.dart';
 import 'client_profile_screen.dart';
 
 class UsersScreen extends ConsumerWidget {
-  const UsersScreen({Key? key}) : super(key: key);
+  const UsersScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -153,6 +154,46 @@ class _InviteCard extends ConsumerWidget {
                       icon: const Icon(Icons.copy, size: 14),
                       label: Text(
                         'COPY INVITE LINK',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () async {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Generating action link...')),
+                        );
+                        try {
+                          await ref.read(invitesProvider.notifier).regenerateInvite(invite);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Invite link generated! It will appear shortly.')),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error generating link: $e'), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.refresh, size: 14),
+                      label: Text(
+                        'GENERATE INVITE LINK',
                         style: GoogleFonts.outfit(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -416,13 +457,12 @@ class _UserCard extends ConsumerWidget {
 
   Color _roleColor(UserRole r) {
     switch (r) {
-      case UserRole.admin:
       case UserRole.administrator:
         return Colors.purple;
+      case UserRole.admin:
+        return Colors.green;
       case UserRole.therapist:
         return Colors.blue;
-      case UserRole.receptionist:
-        return Colors.green;
     }
   }
 }
@@ -432,7 +472,7 @@ class _UserCard extends ConsumerWidget {
 // ===============================================
 class UserProfileScreen extends ConsumerStatefulWidget {
   final AppUser user;
-  const UserProfileScreen({Key? key, required this.user}) : super(key: key);
+  const UserProfileScreen({super.key, required this.user});
   @override
   _UserProfileScreenState createState() => _UserProfileScreenState();
 }
@@ -452,18 +492,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
   late Color _selectedColor;
   final ImagePicker _imagePicker = ImagePicker();
 
-  final List<Color> _colorPalette = [
-    Colors.purple,
-    Colors.blue,
-    Colors.teal,
-    Colors.green,
-    Colors.orange,
-    Colors.red,
-    Colors.pink,
-    Colors.amber,
-    Colors.indigo,
-    Colors.cyan,
-  ];
+  final List<Color> _colorPalette = OrganicPalette.colors;
 
   @override
   void initState() {

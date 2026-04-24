@@ -8,7 +8,6 @@ import '../models/project_module.dart';
 import '../models/clinic_settings.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
-import 'client_profile_screen.dart';
 import '../widgets/dialogs/glass_dialog.dart';
 import '../widgets/dialogs/subtask_editor.dart';
 import '../widgets/dialogs/task_editor.dart';
@@ -19,7 +18,7 @@ import 'package:tressia/screens/session_dashboard.dart';
 enum GanttScale { day, week, month, year }
 
 class DashboardScreen extends ConsumerStatefulWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+  const DashboardScreen({super.key});
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
 }
@@ -72,17 +71,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // =====================================================
   // HELPERS
   // =====================================================
-  void _toggleSubtask(Subtask s) {
-    TaskStatus next;
-    if (s.status == TaskStatus.todo)
-      next = TaskStatus.inProgress;
-    else if (s.status == TaskStatus.inProgress)
-      next = TaskStatus.done;
-    else
-      next = TaskStatus.todo;
-    ref.read(subtasksProvider.notifier).updateSubtask(s.copyWith(status: next));
-  }
-
   void _openPhaseEditor(Project p) =>
       showGlassDialog(context, PhaseEditor(project: p));
   void _openTaskEditor(ProjectTask t) =>
@@ -117,6 +105,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           _ganttAnchorDate = DateTime(_ganttAnchorDate.year + direction, 1, 1);
           break;
       }
+      _lastGanttAnchorDate = null;
+      _lastGanttScale = null;
       _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
     });
   }
@@ -134,18 +124,201 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       elevation: 8,
     ).then((status) {
       if (status != null) {
-        _updateStatus(item, status);
+        if (status == TaskStatus.done) {
+          _confirmAndMarkDone(context, item);
+        } else {
+          _updateStatus(item, status);
+        }
       }
     });
   }
 
-  void _updateStatus(dynamic item, TaskStatus next) {
+  /// Shows a confirmation dialog if there are outstanding children
+  /// before marking a project/task as Done.
+  void _confirmAndMarkDone(BuildContext ctx, dynamic item) {
+    final tasks = ref.read(tasksProvider);
+    final subtasks = ref.read(subtasksProvider);
+
+    List<String> outstanding = [];
+
     if (item is Project) {
-      ref.read(projectsProvider.notifier).updateProject(item.copyWith(status: next));
+      final phaseTasks = tasks.where((t) => t.projectId == item.id);
+      for (final t in phaseTasks) {
+        if (t.status != TaskStatus.done) {
+          outstanding.add('Task: ${t.title}');
+        }
+        final taskSubs = subtasks.where((s) => s.taskId == t.id);
+        for (final s in taskSubs) {
+          if (s.status != TaskStatus.done) {
+            outstanding.add('  ↳ Subtask: ${s.title}');
+          }
+        }
+      }
     } else if (item is ProjectTask) {
-      ref.read(tasksProvider.notifier).updateTask(item.copyWith(status: next));
+      final taskSubs = subtasks.where((s) => s.taskId == item.id);
+      for (final s in taskSubs) {
+        if (s.status != TaskStatus.done) {
+          outstanding.add('Subtask: ${s.title}');
+        }
+      }
+    }
+
+    if (outstanding.isEmpty) {
+      // No outstanding children — just mark done
+      _updateStatus(item, TaskStatus.done);
+      return;
+    }
+
+    final itemName = item is Project ? item.title : (item as ProjectTask).title;
+    final itemType = item is Project ? 'project' : 'task';
+
+    showDialog(
+      context: ctx,
+      builder: (context) => AlertDialog(
+        title: Text('Finalise $itemType?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('The following items under "$itemName" are still outstanding:\n'),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: outstanding.map((o) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(o, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  )).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('Are you sure you want to finalise this $itemType? All outstanding items will be marked as complete.',
+              style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey[600], fontSize: 13)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
+            onPressed: () {
+              Navigator.pop(context);
+              _updateStatus(item, TaskStatus.done);
+            },
+            child: const Text('Finalise', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Derive the correct parent status from a list of child statuses.
+  // Rules:
+  //  - Any child inProgress → parent inProgress
+  //  - All children done → parent done
+  //  - Otherwise (all todo, or mix of done+todo) → parent todo
+  TaskStatus _deriveParentStatus(List<TaskStatus> childStatuses) {
+    if (childStatuses.isEmpty) return TaskStatus.todo;
+    if (childStatuses.any((s) => s == TaskStatus.inProgress)) return TaskStatus.inProgress;
+    if (childStatuses.every((s) => s == TaskStatus.done)) return TaskStatus.done;
+    return TaskStatus.todo;
+  }
+
+  // Recalculate a task's status from its subtasks, then cascade upward to phase.
+  // Task status is FULLY derived from subtasks (all rules apply).
+  void _reconcileTaskFromSubtasks(String taskId) {
+    final subtasks = ref.read(subtasksProvider);
+    final tasks = ref.read(tasksProvider);
+
+    final parentTask = tasks.where((t) => t.id == taskId).firstOrNull;
+    if (parentTask == null) return;
+
+    final siblings = subtasks.where((s) => s.taskId == taskId).toList();
+    if (siblings.isEmpty) return; // No subtasks → don't override manual task status
+
+    final derivedStatus = _deriveParentStatus(siblings.map((s) => s.status).toList());
+    if (parentTask.status != derivedStatus) {
+      ref.read(tasksProvider.notifier).updateTask(parentTask.copyWith(status: derivedStatus));
+    }
+
+    // Now cascade upward: check if the phase should auto-complete
+    _reconcilePhaseFromTasks(parentTask.projectId);
+  }
+
+  void _reconcilePhaseFromTasks(String projectId) {
+    final tasks = ref.read(tasksProvider);
+    final projects = ref.read(projectsProvider);
+
+    final parentPhase = projects.where((p) => p.id == projectId).firstOrNull;
+    if (parentPhase == null) return;
+
+    final phaseTasks = tasks.where((t) => t.projectId == projectId).toList();
+    if (phaseTasks.isEmpty) return;
+
+    // Derived: follow children's status
+    final derivedStatus = _deriveParentStatus(phaseTasks.map((t) => t.status).toList());
+
+    if (parentPhase.status != derivedStatus) {
+      ref.read(projectsProvider.notifier).updateProject(parentPhase.copyWith(status: derivedStatus));
+    }
+  }
+
+  void _updateStatus(dynamic item, TaskStatus next) {
+    final tasks = ref.read(tasksProvider);
+    final subtasks = ref.read(subtasksProvider);
+
+    if (item is Project) {
+      // Manual Done → cascade ALL children to Done
+      if (next == TaskStatus.done) {
+        ref.read(projectsProvider.notifier).updateProject(item.copyWith(status: next));
+        final phaseTasks = tasks.where((t) => t.projectId == item.id);
+        for (final t in phaseTasks) {
+          if (t.status != TaskStatus.done) {
+            ref.read(tasksProvider.notifier).updateTask(t.copyWith(status: TaskStatus.done));
+          }
+          final taskSubs = subtasks.where((s) => s.taskId == t.id);
+          for (final s in taskSubs) {
+            if (s.status != TaskStatus.done) {
+              ref.read(subtasksProvider.notifier).updateSubtask(s.copyWith(status: TaskStatus.done));
+            }
+          }
+        }
+        // No reconciliation needed — we just set everything to Done.
+      } else {
+        // Manual inProgress/todo → STICKY. Just set it, no reconciliation.
+        ref.read(projectsProvider.notifier).updateProject(item.copyWith(status: next));
+      }
+
+    } else if (item is ProjectTask) {
+      // Manual Done → cascade ALL subtasks to Done first
+      if (next == TaskStatus.done) {
+        ref.read(tasksProvider.notifier).updateTask(item.copyWith(status: TaskStatus.done));
+        final taskSubs = subtasks.where((s) => s.taskId == item.id);
+        for (final s in taskSubs) {
+          if (s.status != TaskStatus.done) {
+            ref.read(subtasksProvider.notifier).updateSubtask(s.copyWith(status: TaskStatus.done));
+          }
+        }
+      } else {
+        // Non-Done: set it (reconcile below may override from subtasks)
+        ref.read(tasksProvider.notifier).updateTask(item.copyWith(status: next));
+      }
+
+      // Task status is fully derived from subtasks (if subtasks exist).
+      // Phase only auto-completes (never overrides manual inProgress/todo).
+      _reconcileTaskFromSubtasks(item.id);
+      _reconcilePhaseFromTasks(item.projectId);
+
     } else if (item is Subtask) {
+      // Update the subtask itself
       ref.read(subtasksProvider.notifier).updateSubtask(item.copyWith(status: next));
+
+      // Reconcile upward: task fully derived from subtasks, phase auto-completes only
+      _reconcileTaskFromSubtasks(item.taskId);
     }
   }
 
@@ -219,8 +392,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final now = DateTime.now();
     if (endDate.isBefore(now)) return 2; // RED (Overdue)
     // ONLY gold if in the future AND within 3 days
-    if (endDate.isAfter(now) && endDate.difference(now).inHours <= 72)
+    if (endDate.isAfter(now) && endDate.difference(now).inHours <= 72) {
       return 1; // GOLD
+    }
     return 0;
   }
 
@@ -229,13 +403,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // =====================================================
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(tasksProvider);
-    final projects = ref.watch(projectsProvider);
-    final subtasks = ref.watch(subtasksProvider);
+    final allTasks = ref.watch(tasksProvider);
+    final allProjects = ref.watch(projectsProvider);
+    final allSubtasks = ref.watch(subtasksProvider);
     final users = ref.watch(systemUsersProvider);
+    final currentUser = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isDesktop = MediaQuery.of(context).size.width > 800;
+
+    // ── Role-based data filtering ──
+    // Therapists: only see projects/tasks/subtasks assigned to them
+    // Admin & Administrator: see everything
+    final bool isTherapistOnly = currentUser.role == UserRole.therapist;
+
+    final projects = isTherapistOnly
+        ? allProjects.where((p) => p.assignedTherapistIds.contains(currentUser.id)).toList()
+        : allProjects;
+    final tasks = isTherapistOnly
+        ? allTasks.where((t) =>
+            t.assignedUserIds.contains(currentUser.id) ||
+            projects.any((p) => p.id == t.projectId)).toList()
+        : allTasks;
+    final subtasks = isTherapistOnly
+        ? allSubtasks.where((s) =>
+            s.assignedUserIds.contains(currentUser.id) ||
+            tasks.any((t) => t.id == s.taskId)).toList()
+        : allSubtasks;
 
     // Global Smart Search Logic
     final query = _searchQuery.toLowerCase();
@@ -587,12 +781,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ? '${item.startTime!.format(context)}'
                       : 'Scheduled',
                   theme: theme,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (c) => SessionDashboard(session: item),
-                    ),
-                  ),
+                  onTap: () {
+                    if (ref.read(currentUserProvider).role == UserRole.admin) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Admins do not have access to clinical session data.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (c) => SessionDashboard(session: item),
+                      ),
+                    );
+                  },
                 );
               } else if (item is ProjectTask) {
                 return _todayChip(
@@ -754,7 +959,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             InkWell(
               onTap: () {
-                setState(() => _ganttAnchorDate = DateTime.now());
+                setState(() {
+                  _ganttAnchorDate = DateTime.now();
+                  _lastGanttAnchorDate = null;
+                  _lastGanttScale = null;
+                });
                 _ganttTitleNotifier.value = _getGanttTitle(_ganttAnchorDate);
               },
               borderRadius: BorderRadius.circular(12),
@@ -804,11 +1013,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         setState(() {
           _ganttScale = scale;
           _ganttAnchorDate = DateTime.now();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_ganttHorizontalScroll.hasClients) {
-              _ganttHorizontalScroll.jumpTo(0);
-            }
-          });
+          // Force recalc so _lastGanttAnchorDate triggers auto-scroll to now
+          _lastGanttAnchorDate = null;
+          _lastGanttScale = null;
         });
         _ganttTitleNotifier.value = _getGanttTitle(DateTime.now());
       },
@@ -1015,19 +1222,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _lastGanttScale = scale;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_ganttHorizontalScroll.hasClients) {
+          // Auto-align: scroll so "now" is visible at ~1/3 from left of viewport
           double jumpTarget = 0;
-          if (scale == GanttScale.day) jumpTarget = (60 * 24) * unitWidth;
-          if (scale == GanttScale.week) jumpTarget = (24 * 7) * unitWidth;
-          if (scale == GanttScale.month) {
-             int offsetMonths = 12;
-             double offsetDaysTarget = 0;
-             for (int m = 0; m < offsetMonths; m++) {
-               offsetDaysTarget += DateTime(startAnchor.year, startAnchor.month + m, 0).day;
-             }
-             jumpTarget = offsetDaysTarget * unitWidth;
+          if (currentPos >= 0) {
+            // Center on the current time marker, offset left by 1/3 viewport
+            jumpTarget = (currentPos - (timelineWidth * 0.33)).clamp(0.0, _ganttHorizontalScroll.position.maxScrollExtent);
+          } else {
+            // Fallback: jump to middle of timeline
+            if (scale == GanttScale.day) jumpTarget = (60 * 24) * unitWidth;
+            if (scale == GanttScale.week) jumpTarget = (40 * 7) * unitWidth;
+            if (scale == GanttScale.month) {
+               int offsetMonths = 12;
+               double offsetDaysTarget = 0;
+               for (int m = 0; m < offsetMonths; m++) {
+                 offsetDaysTarget += DateTime(startAnchor.year, startAnchor.month + m + 1, 0).day;
+               }
+               jumpTarget = offsetDaysTarget * unitWidth;
+            }
+            if (scale == GanttScale.year) jumpTarget = (totalUnits / 2.0) * unitWidth;
           }
-          if (scale == GanttScale.year) jumpTarget = (totalUnits / 2.0) * unitWidth;
-          _ganttHorizontalScroll.jumpTo(jumpTarget);
+          _ganttHorizontalScroll.jumpTo(jumpTarget.clamp(0.0, _ganttHorizontalScroll.position.maxScrollExtent));
         }
       });
     }
@@ -1275,12 +1489,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface.withValues(alpha: 0.9)),
+              style: GoogleFonts.outfit(
+                fontSize: 12, 
+                fontWeight: FontWeight.w700, 
+                color: (item?.status == TaskStatus.done) 
+                    ? theme.hintColor.withValues(alpha: 0.5) 
+                    : theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                decoration: (item?.status == TaskStatus.done) ? TextDecoration.lineThrough : null,
+              ),
             ),
           ),
         ],
       ) : const SizedBox.shrink(),
     );
+
+    // Compute urgency for Gantt bars (mirrors Kanban)
+    int ganttUrgency = 0;
+    if (item != null) {
+      DateTime itemEnd = DateTime.now();
+      TaskStatus itemStatus = TaskStatus.todo;
+      if (item is Project) { itemEnd = item.endDate; itemStatus = item.status; }
+      else if (item is ProjectTask) { itemEnd = item.endDate; itemStatus = item.status; }
+      else if (item is Subtask) { itemEnd = item.endDate; itemStatus = item.status; }
+      ganttUrgency = _getUrgency(itemEnd, itemStatus);
+    }
 
     // Right Column Widget
     Widget rightWidget = Container(
@@ -1303,18 +1535,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 height: barHeight,
                 decoration: BoxDecoration(
                   color: (item?.status == TaskStatus.done)
-                      ? Colors.grey.withValues(alpha: 0.6)
+                      ? theme.dividerColor.withValues(alpha: 0.8)
                       : (isPhase ? Colors.transparent : color.withValues(alpha: isSpanningEntirely ? 0.3 : 1.0)),
                   borderRadius: isPhase ? BorderRadius.circular(0) : BorderRadius.circular(barHeight / 2),
-                  border: isPhase ? Border.symmetric(vertical: BorderSide(color: (item?.status == TaskStatus.done) ? Colors.grey : color, width: 3), horizontal: BorderSide(color: (item?.status == TaskStatus.done) ? Colors.grey : color, width: 1.5)) : null,
-                  boxShadow: (item?.status == TaskStatus.inProgress) 
-                    ? [
-                        BoxShadow(color: Colors.blue.withValues(alpha: 0.8), blurRadius: 12, spreadRadius: 3),
-                        BoxShadow(color: Colors.blue.withValues(alpha: 0.4), blurRadius: 4, spreadRadius: 1),
-                      ]
-                    : ((isProminent && !isPhase) ? [
-                        BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: 1),
-                      ] : null),
+                  border: (item?.status == TaskStatus.done)
+                      ? (isPhase 
+                          ? Border.symmetric(
+                              vertical: BorderSide(color: theme.hintColor, width: 3),
+                              horizontal: BorderSide(color: theme.hintColor, width: 1.5),
+                            )
+                          : Border.all(color: theme.hintColor, width: 1.2))
+                      : (isPhase
+                          ? Border.symmetric(
+                              vertical: BorderSide(color: color, width: 3),
+                              horizontal: BorderSide(color: color, width: 1.5),
+                            )
+                          : (ganttUrgency > 0
+                              ? Border.all(
+                                  color: ganttUrgency == 2 ? Colors.red : Colors.amber,
+                                  width: 2.0,
+                                )
+                              : null)),
+                  boxShadow: (item?.status == TaskStatus.done)
+                    ? null // No fuzziness for done items
+                    : (item?.status == TaskStatus.inProgress)
+                      ? [
+                          BoxShadow(color: Colors.blue.withValues(alpha: 0.8), blurRadius: 12, spreadRadius: 3),
+                          BoxShadow(color: Colors.blue.withValues(alpha: 0.4), blurRadius: 4, spreadRadius: 1),
+                        ]
+                      : (ganttUrgency == 2
+                          ? [BoxShadow(color: Colors.red.withValues(alpha: 0.5), blurRadius: 10, spreadRadius: 2)]
+                          : (ganttUrgency == 1
+                              ? [BoxShadow(color: Colors.amber.withValues(alpha: 0.5), blurRadius: 8, spreadRadius: 1)]
+                              : ((isProminent && !isPhase) ? [
+                                  BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, spreadRadius: 1),
+                                ] : null))),
                 ),
               ),
             ),
@@ -1345,7 +1600,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         style: GoogleFonts.outfit(
                           fontSize: isTask ? 10 : 8,
                           fontWeight: FontWeight.bold,
-                          color: (item?.status == TaskStatus.done) ? Colors.white70 : Colors.white,
+                          color: (item?.status == TaskStatus.done) 
+                              ? Colors.white.withValues(alpha: 0.4) 
+                              : Colors.white,
                           decoration: (item?.status == TaskStatus.done) ? TextDecoration.lineThrough : null,
                         ),
                       ),
@@ -1368,7 +1625,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         style: GoogleFonts.outfit(
                           fontSize: isTask ? 10 : 8,
                           fontWeight: FontWeight.bold,
-                          color: (item?.status == TaskStatus.done) ? theme.hintColor : theme.colorScheme.onSurface,
+                          color: (item?.status == TaskStatus.done) 
+                              ? theme.hintColor.withValues(alpha: 0.4) 
+                              : theme.colorScheme.onSurface,
                           decoration: (item?.status == TaskStatus.done) ? TextDecoration.lineThrough : null,
                         ),
                       ),
@@ -1413,9 +1672,11 @@ List<Widget> _buildKanbanGroups(
           duration: const Duration(milliseconds: 300),
           margin: const EdgeInsets.only(bottom: 24),
           decoration: BoxDecoration(
-            color: p.color.withValues(alpha: 0.2),
+            color: p.status == TaskStatus.done 
+                ? theme.dividerColor.withValues(alpha: 0.1) 
+                : p.color.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: p.color),
+            border: Border.all(color: p.status == TaskStatus.done ? theme.dividerColor : p.color),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.07),
@@ -1457,14 +1718,15 @@ List<Widget> _buildKanbanGroups(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 1.2,
-                                color: theme.colorScheme.onSurface,
+                                color: p.status == TaskStatus.done ? theme.hintColor : theme.colorScheme.onSurface,
+                                decoration: p.status == TaskStatus.done ? TextDecoration.lineThrough : null,
                               ),
                             ),
                              Text(
                                 p.clientType.replaceFirst('Profile: ', ''),
                                 style: GoogleFonts.outfit(
                                   fontSize: 10,
-                                  color: theme.hintColor,
+                                  color: p.status == TaskStatus.done ? theme.hintColor.withValues(alpha: 0.5) : theme.hintColor,
                                 ),
                               ),
                           ],
@@ -1511,9 +1773,7 @@ List<Widget> _buildKanbanGroups(
                                 .where((s) => s.taskId == t.id)
                                 .toList();
                             tSubs.sort((a, b) => a.endDate.compareTo(b.endDate));
-                            bool allDone =
-                                tSubs.isNotEmpty &&
-                                tSubs.every((s) => s.status == TaskStatus.done);
+                            bool isTaskDone = t.status == TaskStatus.done;
                             bool isTaskCollapsed = _collapsedKanbanTasks.contains(
                               t.id,
                             );
@@ -1528,14 +1788,14 @@ List<Widget> _buildKanbanGroups(
                                       ? Colors.red
                                       : (taskUrgency == 1
                                             ? Colors.amber
-                                            : (allDone
+                                            : (isTaskDone
                                                   ? theme.dividerColor.withValues(
                                                       alpha: 0.2,
                                                     )
                                                   : Colors.transparent)),
                                   width: taskUrgency > 0 ? 4.0 : 1.0,
                                 ),
-                                color: allDone
+                                color: isTaskDone
                                     ? theme.scaffoldBackgroundColor
                                     : t.color.withValues(alpha: 0.65),
                                 boxShadow: [
@@ -1553,7 +1813,7 @@ List<Widget> _buildKanbanGroups(
                                   children: [
                                     Container(
                                       width: 6,
-                                      color: allDone ? theme.dividerColor : t.color,
+                                      color: isTaskDone ? theme.dividerColor : t.color,
                                     ),
                                     Expanded(
                                       child: Column(
@@ -1570,10 +1830,10 @@ List<Widget> _buildKanbanGroups(
                                                   GestureDetector(
                                                     onTapDown: (details) => _showStatusMenu(context, details.globalPosition, t),
                                                     child: Icon(
-                                                      (t.status == TaskStatus.done || allDone)
+                                                      isTaskDone
                                                           ? Icons.check_circle
                                                           : (t.status == TaskStatus.inProgress ? Icons.circle : Icons.radio_button_unchecked),
-                                                      color: (t.status == TaskStatus.done || allDone)
+                                                      color: isTaskDone
                                                           ? theme.dividerColor
                                                           : (t.status == TaskStatus.inProgress ? Colors.blue : t.color),
                                                       size: 18,
@@ -1586,10 +1846,10 @@ List<Widget> _buildKanbanGroups(
                                                       style: GoogleFonts.outfit(
                                                         fontSize: 15,
                                                         fontWeight: FontWeight.w700,
-                                                        decoration: allDone
+                                                        decoration: isTaskDone
                                                             ? TextDecoration.lineThrough
                                                             : null,
-                                                        color: allDone
+                                                        color: isTaskDone
                                                             ? theme.hintColor
                                                             : theme.colorScheme.onSurface,
                                                       ),

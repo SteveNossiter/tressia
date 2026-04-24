@@ -4,14 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/clinic_settings.dart';
 import '../providers/app_state.dart';
 import '../widgets/dialogs/user_creator.dart';
 import '../widgets/dialogs/glass_dialog.dart';
-import '../services/pdf_generator_service.dart';
 
 class ClinicSetupScreen extends ConsumerStatefulWidget {
-  const ClinicSetupScreen({Key? key}) : super(key: key);
+  const ClinicSetupScreen({super.key});
 
   @override
   _ClinicSetupScreenState createState() => _ClinicSetupScreenState();

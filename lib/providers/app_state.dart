@@ -181,10 +181,32 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
   }
 
   Future<void> cancelInvite(String id) async {
+    final oldState = state;
+    state = state.where((item) => item.id != id).toList();
     try {
       await _repo.deleteInvite(id);
     } catch (e) {
+      state = oldState;
       debugPrint('InvitesNotifier.cancelInvite Error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> regenerateInvite(UserInvite invite) async {
+    try {
+      final newLink = await _repo.inviteUser(
+        email: invite.email,
+        role: invite.role,
+        clinicId: invite.clinicId,
+        fullName: invite.fullName,
+      );
+      if (newLink != null) {
+        state = state
+            .map((i) => i.id == invite.id ? i.copyWith(actionLink: newLink) : i)
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('InvitesNotifier.regenerateInvite Error: $e');
       rethrow;
     }
   }
@@ -197,8 +219,10 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
   String last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
   UserRole role = UserRole.therapist;
-  if (data['role'] == 'Administrator') role = UserRole.admin;
-  if (data['role'] == 'Admin') role = UserRole.receptionist;
+  final roleStr = (data['role'] ?? '').toString().toLowerCase();
+  if (roleStr == 'administrator') role = UserRole.administrator;
+  else if (roleStr == 'admin') role = UserRole.admin;
+  else role = UserRole.therapist;
 
   // Parse color from hex string, default to purple
   Color userColor = Colors.purple;
@@ -353,6 +377,11 @@ final projectsProvider = NotifierProvider<ProjectsNotifier, List<Project>>(
 class ProjectsNotifier extends Notifier<List<Project>> {
   final _repo = SupabaseRepository();
   StreamSubscription? _sub;
+  DateTime _suppressStreamUntil = DateTime(0);
+
+  void _suppressStream() {
+    _suppressStreamUntil = DateTime.now().add(const Duration(seconds: 3));
+  }
 
   @override
   List<Project> build() {
@@ -363,9 +392,13 @@ class ProjectsNotifier extends Notifier<List<Project>> {
     
     if (user.clinicId.isNotEmpty) {
       // Initial background fetch
-      _repo.fetchProjects(user.clinicId).then((data) => state = data);
+      _repo.fetchProjects(user.clinicId).then((data) {
+        if (DateTime.now().isBefore(_suppressStreamUntil)) return;
+        state = data;
+      });
 
       _sub = _repo.streamProjects(user.clinicId).listen((data) {
+        if (DateTime.now().isBefore(_suppressStreamUntil)) return;
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
         }
@@ -383,13 +416,12 @@ class ProjectsNotifier extends Notifier<List<Project>> {
     final clinicId = ref.read(currentUserProvider).clinicId;
     if (clinicId.isEmpty) return;
     
-    // Optimistic update
+    _suppressStream();
     state = [...state, p];
     
     try {
       await _repo.saveProject(p, clinicId);
     } catch (e) {
-      // Rollback on error
       state = state.where((item) => item.id != p.id).toList();
       rethrow;
     }
@@ -399,6 +431,7 @@ class ProjectsNotifier extends Notifier<List<Project>> {
     final clinicId = ref.read(currentUserProvider).clinicId;
     if (clinicId.isEmpty) return;
     
+    _suppressStream();
     final oldState = state;
     state = [for (final item in state) if (item.id == p.id) p else item];
     
@@ -411,6 +444,7 @@ class ProjectsNotifier extends Notifier<List<Project>> {
   }
 
   Future<void> removeProject(String id) async {
+    _suppressStream();
     final oldState = state;
     state = state.where((item) => item.id != id).toList();
     
@@ -508,6 +542,11 @@ final tasksProvider = NotifierProvider<TasksNotifier, List<ProjectTask>>(
 class TasksNotifier extends Notifier<List<ProjectTask>> {
   final _repo = SupabaseRepository();
   StreamSubscription? _sub;
+  DateTime _suppressStreamUntil = DateTime(0);
+
+  void _suppressStream() {
+    _suppressStreamUntil = DateTime.now().add(const Duration(seconds: 3));
+  }
 
   @override
   List<ProjectTask> build() {
@@ -515,10 +554,13 @@ class TasksNotifier extends Notifier<List<ProjectTask>> {
     _sub?.cancel();
 
     if (user.clinicId.isNotEmpty) {
-      // Initial fetch
-      _repo.fetchTasks(user.clinicId).then((data) => state = data);
+      _repo.fetchTasks(user.clinicId).then((data) {
+        if (DateTime.now().isBefore(_suppressStreamUntil)) return;
+        state = data;
+      });
 
       _sub = _repo.streamTasks(user.clinicId).listen((data) {
+        if (DateTime.now().isBefore(_suppressStreamUntil)) return;
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
         }
@@ -536,6 +578,7 @@ class TasksNotifier extends Notifier<List<ProjectTask>> {
     final clinicId = ref.read(currentUserProvider).clinicId;
     if (clinicId.isEmpty) return;
     
+    _suppressStream();
     state = [...state, t];
     
     try {
@@ -550,6 +593,7 @@ class TasksNotifier extends Notifier<List<ProjectTask>> {
     final clinicId = ref.read(currentUserProvider).clinicId;
     if (clinicId.isEmpty) return;
     
+    _suppressStream();
     final oldState = state;
     state = [for (final item in state) if (item.id == t.id) t else item];
     
@@ -562,6 +606,7 @@ class TasksNotifier extends Notifier<List<ProjectTask>> {
   }
 
   Future<void> removeTask(String id) async {
+    _suppressStream();
     final oldState = state;
     state = state.where((item) => item.id != id).toList();
     
@@ -584,6 +629,11 @@ final subtasksProvider = NotifierProvider<SubtasksNotifier, List<Subtask>>(
 class SubtasksNotifier extends Notifier<List<Subtask>> {
   final _repo = SupabaseRepository();
   StreamSubscription? _sub;
+  DateTime _suppressStreamUntil = DateTime(0);
+
+  void _suppressStream() {
+    _suppressStreamUntil = DateTime.now().add(const Duration(seconds: 3));
+  }
 
   @override
   List<Subtask> build() {
@@ -591,10 +641,13 @@ class SubtasksNotifier extends Notifier<List<Subtask>> {
     _sub?.cancel();
 
     if (user.clinicId.isNotEmpty) {
-      // Initial fetch
-      _repo.fetchSubtasks(user.clinicId).then((data) => state = data);
+      _repo.fetchSubtasks(user.clinicId).then((data) {
+        if (DateTime.now().isBefore(_suppressStreamUntil)) return;
+        state = data;
+      });
 
       _sub = _repo.streamSubtasks(user.clinicId).listen((data) {
+        if (DateTime.now().isBefore(_suppressStreamUntil)) return;
         if (ref.read(currentUserProvider).clinicId == user.clinicId) {
           state = data;
         }
@@ -612,6 +665,7 @@ class SubtasksNotifier extends Notifier<List<Subtask>> {
     final clinicId = ref.read(currentUserProvider).clinicId;
     if (clinicId.isEmpty) return;
     
+    _suppressStream();
     state = [...state, s];
     
     try {
@@ -626,6 +680,7 @@ class SubtasksNotifier extends Notifier<List<Subtask>> {
     final clinicId = ref.read(currentUserProvider).clinicId;
     if (clinicId.isEmpty) return;
     
+    _suppressStream();
     final oldState = state;
     state = [for (final item in state) if (item.id == s.id) s else item];
     
@@ -638,6 +693,7 @@ class SubtasksNotifier extends Notifier<List<Subtask>> {
   }
 
   Future<void> removeSubtask(String id) async {
+    _suppressStream();
     final oldState = state;
     state = state.where((item) => item.id != id).toList();
     

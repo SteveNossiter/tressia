@@ -31,7 +31,11 @@ class EncryptionService {
   /// Initializes the encryption engine.
   /// Generates AES-256 key in Secure Enclave if none exists.
   static Future<void> init() async {
+    print('TRESSIA_DEBUG: Initialising EncryptionService...');
     if (_initialised) return;
+    
+    // On Web, FlutterSecureStorage uses IndexedDB or WebStorage.
+    // If it fails, we fall back to SharedPreferences immediately.
 
     String? base64Key;
     final fallbackPrefs = await SharedPreferences.getInstance();
@@ -51,17 +55,14 @@ class EncryptionService {
           return;
         }
       } catch (e) {
-        if (e.toString().contains('34018')) {
-          // macOS dev: missing Apple Developer Provisioning Profile
-          final newKey = enc.Key.fromSecureRandom(32);
-          base64Key = base64Encode(newKey.bytes);
-          await fallbackPrefs.setString('${_keyAlias}_fallback', base64Key);
-          _sessionKey = newKey;
-          _initialised = true;
-          return;
-        } else {
-          rethrow;
-        }
+        print('TRESSIA_DEBUG: Secure Storage failed ($e). Using SharedPreferences fallback.');
+        // Web / macOS Fallback: missing provisioning or browser API limits
+        final newKey = enc.Key.fromSecureRandom(32);
+        base64Key = base64Encode(newKey.bytes);
+        await fallbackPrefs.setString('${_keyAlias}_fallback', base64Key);
+        _sessionKey = newKey;
+        _initialised = true;
+        return;
       }
     }
 

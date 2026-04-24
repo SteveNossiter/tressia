@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 // =============================================
 // USER ROLES
 // =============================================
-// admin / administrator: Full access. Also listed as a therapist.
-// therapist: Can see own clients, session data, request assignments.
-// receptionist: Admin functions + new client creation + send requests.
+// administrator: Full access to everything.
+// therapist: Access ONLY to clients/projects/tasks/subtasks assigned to them.
+//            Can create new items but can only assign to themselves.
+// admin: ZERO access to client-level session data or reports.
+//        Full access to kanban/gantt. Can create clients and assign therapists/administrators.
 // =============================================
-enum UserRole { admin, administrator, therapist, receptionist }
+enum UserRole { admin, administrator, therapist }
 
 // =============================================
 // APP USER — Full profile with AHPRA-compliant fields
@@ -62,8 +64,8 @@ class AppUser {
   bool get isAdmin => role == UserRole.admin || role == UserRole.administrator;
   bool get isSuperAdmin => role == UserRole.administrator;
   bool get isTherapist =>
-      role == UserRole.therapist || isAdmin; // Admin is also a therapist
-  bool get isReceptionist => role == UserRole.receptionist;
+      role == UserRole.therapist || role == UserRole.administrator; // Administrator also acts as therapist
+  bool get isOfficeAdmin => role == UserRole.admin; // Office admin - no session data access
 
   String get displayName =>
       name.isNotEmpty ? name : '$firstName $lastName'.trim();
@@ -228,4 +230,26 @@ class UserInvite {
     required this.createdBy,
     required this.createdAt,
   });
+
+  UserInvite copyWith({
+    String? id,
+    String? clinicId,
+    String? email,
+    String? role,
+    String? fullName,
+    String? actionLink,
+    String? createdBy,
+    DateTime? createdAt,
+  }) {
+    return UserInvite(
+      id: id ?? this.id,
+      clinicId: clinicId ?? this.clinicId,
+      email: email ?? this.email,
+      role: role ?? this.role,
+      fullName: fullName ?? this.fullName,
+      actionLink: actionLink ?? this.actionLink,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }

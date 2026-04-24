@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 import '../models/project_module.dart';
 import '../models/clinic_settings.dart';
@@ -328,7 +330,7 @@ class SupabaseRepository {
     }
   }
 
-  Future<void> inviteUser({
+  Future<String?> inviteUser({
     required String email,
     required String role,
     required String clinicId,
@@ -342,24 +344,59 @@ class SupabaseRepository {
         'role': role,
         'full_name': fullName,
         'created_by': _client.auth.currentUser?.id,
-      });
+      }, onConflict: 'clinic_id,email');
 
       // 2. Trigger the Edge Function to send the actual Auth email
       try {
-        await _client.functions.invoke(
-          'invite-user',
-          body: {
+        final session = _client.auth.currentSession;
+        if (session == null) throw Exception('No active session. Please log in again.');
+
+        // Passing the token in the URL query to avoid CORS preflight "allowed headers" issues 
+        // and bypassing the ES256 gateway algorithm block.
+        final uri = Uri.parse('https://dfwpvvppdnpyrvnoccni.supabase.co/functions/v1/invite-user')
+            .replace(queryParameters: {'token': session.accessToken});
+
+        // Ensure we redirect back to wherever the app is currently running (localhost vs prod)
+        final redirectTo = Uri.base.origin.contains('localhost') 
+            ? '${Uri.base.origin}/' 
+            : 'https://tressia.pages.dev/';
+
+        final response = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'apiKey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmd3B2dnBwZG5weXJ2bm9jY25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODU3NTksImV4cCI6MjA5MDA2MTc1OX0.vzZM5Hiubg9KaxBmGfFfHy6m3vYE2X8dVSndHRfkLlA',
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmd3B2dnBwZG5weXJ2bm9jY25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODU3NTksImV4cCI6MjA5MDA2MTc1OX0.vzZM5Hiubg9KaxBmGfFfHy6m3vYE2X8dVSndHRfkLlA',
+          },
+          body: jsonEncode({
             'email': email,
             'role': role,
             'clinicId': clinicId,
             'fullName': fullName,
-          },
+            'redirectTo': redirectTo,
+          }),
         );
+
+        final data = jsonDecode(response.body);
+        print('TRESSIA_DEBUG: Edge Function Result Status: ${response.statusCode}');
+        print('TRESSIA_DEBUG: Edge Function Result Data: $data');
+
+        if (response.statusCode == 200 && data['action_link'] != null) {
+          final link = data['action_link'] as String;
+          print('TRESSIA_DEBUG: Link generated: $link');
+          
+          await _client.from('invites').update({'action_link': link}).eq('clinic_id', clinicId).eq('email', email);
+          
+          return link;
+        } else {
+           print('TRESSIA_DEBUG: Edge Function Failed: ${data['error'] ?? 'No action_link returned'}');
+        }
       } catch (fError) {
-        debugPrint('Invite Email Function Warning: $fError');
+        print('TRESSIA_DEBUG: Edge Function Error: $fError');
       }
+      return null;
     } catch (e) {
-      debugPrint('SupabaseRepository.inviteUser Error: $e');
+      print('TRESSIA_DEBUG: inviteUser Exception: $e');
       rethrow;
     }
   }

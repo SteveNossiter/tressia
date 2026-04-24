@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import '../../models/project_module.dart';
-import '../../models/clinic_settings.dart';
 import '../../providers/app_state.dart';
 import '../../theme/organic_palette.dart';
 import 'subtask_editor.dart';
@@ -14,7 +13,7 @@ import '../multi_select_dropdown.dart';
 
 class TaskEditor extends ConsumerStatefulWidget {
   final ProjectTask task;
-  const TaskEditor({Key? key, required this.task}) : super(key: key);
+  const TaskEditor({super.key, required this.task});
 
   @override
   _TaskEditorState createState() => _TaskEditorState();
@@ -79,16 +78,127 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
       if (pt != null) {
         final newDate = DateTime(pd.year, pd.month, pd.day, pt.hour, pt.minute);
         setState(() {
-          if (isStart)
+          if (isStart) {
             _startDate = newDate;
-          else
+          } else {
             _endDate = newDate;
+          }
         });
       }
     }
   }
 
-  void _save() {
+  Future<bool> _showDateBoundaryDialog({
+    required String parentType,
+    required String parentName,
+    required DateTime parentStart,
+    required DateTime parentEnd,
+    required DateTime childStart,
+    required DateTime childEnd,
+  }) async {
+    final df = DateFormat('d MMM yyyy');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Dates exceed $parentType',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'The dates you selected fall outside the parent $parentType "$parentName":',
+              style: GoogleFonts.outfit(),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Parent $parentType dates:',
+                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '${df.format(parentStart)}  →  ${df.format(parentEnd)}',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your selected dates:',
+                    style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '${df.format(childStart)}  →  ${df.format(childEnd)}',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Proceeding will automatically extend the $parentType dates to accommodate this task.',
+              style: GoogleFonts.outfit(
+                fontStyle: FontStyle.italic,
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Go Back'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700]),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Extend & Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _save() async {
+    // Validate dates against parent project
+    final projects = ref.read(projectsProvider);
+    final parentProject = projects.where((p) => p.id == widget.task.projectId).firstOrNull;
+
+    if (parentProject != null) {
+      final startBefore = _startDate.isBefore(parentProject.startDate);
+      final endAfter = _endDate.isAfter(parentProject.endDate);
+
+      if (startBefore || endAfter) {
+        final confirmed = await _showDateBoundaryDialog(
+          parentType: 'project',
+          parentName: parentProject.title,
+          parentStart: parentProject.startDate,
+          parentEnd: parentProject.endDate,
+          childStart: _startDate,
+          childEnd: _endDate,
+        );
+        if (!confirmed) return;
+
+        // Auto-extend project dates
+        final newStart = startBefore ? _startDate : parentProject.startDate;
+        final newEnd = endAfter ? _endDate : parentProject.endDate;
+        ref.read(projectsProvider.notifier).updateProject(
+          parentProject.copyWith(startDate: newStart, endDate: newEnd),
+        );
+      }
+    }
+
     final upd = widget.task.copyWith(
       title: _titleCtrl.text,
       description: _descCtrl.text,
@@ -106,18 +216,7 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
         .read(subtasksProvider)
         .where((s) => s.taskId == widget.task.id)
         .toList();
-    final hasIncomplete = subtasks.any((s) => s.status != TaskStatus.done);
-
-    String message;
-    if (subtasks.isNotEmpty && hasIncomplete) {
-      message =
-          'You have ${subtasks.length} subtask(s) associated with this task, including incomplete ones.\n\nWould you like to delete all associated subtasks?';
-    } else if (subtasks.isNotEmpty) {
-      message =
-          'Are you sure you want to delete this task and all ${subtasks.length} associated subtask(s)?';
-    } else {
-      message = 'Are you sure you want to delete "${widget.task.title}"?';
-    }
+    final activeSubtasks = subtasks.where((s) => s.status != TaskStatus.done).toList();
 
     showDialog(
       context: context,
@@ -126,7 +225,52 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
           'Delete Task',
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
         ),
-        content: Text(message, style: GoogleFonts.outfit()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (activeSubtasks.isNotEmpty) ...[
+              Text(
+                'The following subtasks are still active:',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 150),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: activeSubtasks.map((s) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            s.status == TaskStatus.inProgress
+                                ? Icons.play_circle_fill
+                                : Icons.circle_outlined,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(s.title, style: GoogleFonts.outfit(fontSize: 13)),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Text(
+              subtasks.isNotEmpty
+                  ? 'Are you sure you want to delete "${widget.task.title}" and all ${subtasks.length} associated subtask(s)?'
+                  : 'Are you sure you want to delete "${widget.task.title}"?',
+              style: GoogleFonts.outfit(),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -231,8 +375,8 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                       decoration: InputDecoration(
                         labelText: 'Task Title',
                         filled: true,
-                        fillColor: theme.scaffoldBackgroundColor.withOpacity(
-                          0.5,
+                        fillColor: theme.scaffoldBackgroundColor.withValues(
+                          alpha: 0.5,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -247,8 +391,8 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                       decoration: InputDecoration(
                         labelText: 'Description',
                         filled: true,
-                        fillColor: theme.scaffoldBackgroundColor.withOpacity(
-                          0.5,
+                        fillColor: theme.scaffoldBackgroundColor.withValues(
+                          alpha: 0.5,
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -291,7 +435,7 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        ..._palette.take(9).map(
+                        ..._palette.map(
                               (c) => GestureDetector(
                                 onTap: () => setState(() => _color = c),
                                 child: AnimatedContainer(
@@ -318,28 +462,6 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                                 ),
                               ),
                             ),
-                        GestureDetector(
-                          onTap: _showColorPicker,
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: theme.dividerColor.withValues(alpha: 0.1),
-                              shape: BoxShape.circle,
-                              border: !_palette.any((pc) => pc.value == _color.value)
-                                  ? Border.all(
-                                      color: theme.colorScheme.onSurface,
-                                      width: 2,
-                                    )
-                                  : null,
-                            ),
-                            child: Icon(
-                              Icons.colorize,
-                              size: 16,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -466,13 +588,13 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
                           (s) => Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: (s.color ?? widget.task.color).withOpacity(
-                                0.05,
+                              color: (s.color ?? widget.task.color).withValues(
+                                alpha: 0.05,
                               ),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: (s.color ?? widget.task.color)
-                                    .withOpacity(0.2),
+                                    .withValues(alpha: 0.2),
                               ),
                             ),
                             child: ListTile(
@@ -552,7 +674,7 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor.withOpacity(0.5),
+          color: theme.scaffoldBackgroundColor.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -595,7 +717,7 @@ class _TaskEditorState extends ConsumerState<TaskEditor> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: theme.primaryColor.withOpacity(0.7)),
+          Icon(icon, size: 18, color: theme.primaryColor.withValues(alpha: 0.7)),
           const SizedBox(width: 12),
           SizedBox(
             width: 80,

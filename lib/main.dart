@@ -13,17 +13,26 @@ import 'services/encryption_service.dart';
 
 // IMPORTANT: Supabase URL and Anon / Publishable Key
 const supabaseUrl = 'https://dfwpvvppdnpyrvnoccni.supabase.co';
-const supabaseAnonKey = 'sb_publishable_FTGBQ79nE2DvdSBkU4D-gQ_lV5Gj1wY';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmd3B2dnBwZG5weXJ2bm9jY25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODU3NTksImV4cCI6MjA5MDA2MTc1OX0.vzZM5Hiubg9KaxBmGfFfHy6m3vYE2X8dVSndHRfkLlA';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  print('TRESSIA_DEBUG: App Booting...');
   
+  // Use the standard implicit flow so the app can correctly digest the #access_token 
+  // embedded in manually generated Edge Function invite links
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.implicit,
+    ),
   );
+  print('TRESSIA_DEBUG: Supabase Initialised');
   
   await EncryptionService.init();
+  print('TRESSIA_DEBUG: Encryption Initialised — launching UI');
+  
   runApp(const ProviderScope(child: TressiaApp()));
 }
 
@@ -81,8 +90,14 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           final user = session?.user ??
               Supabase.instance.client.auth.currentUser;
 
+          print('TRESSIA_DEBUG: AuthGate State - session=${session != null}, userEmail=${user?.email}');
+          if (user != null) {
+            print('TRESSIA_DEBUG: userMetadata = ${user.userMetadata}');
+          }
+
           if (session != null && user?.emailConfirmedAt != null) {
             final needsPasswordSetup = user?.userMetadata?['needs_password_setup'] == true;
+            print('TRESSIA_DEBUG: needsPasswordSetup = $needsPasswordSetup');
             if (needsPasswordSetup) {
               return const PasswordSetupScreen();
             }

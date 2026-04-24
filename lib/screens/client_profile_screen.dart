@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,8 +7,6 @@ import '../models/project_module.dart';
 import '../models/clinic_settings.dart';
 import '../providers/app_state.dart';
 import '../services/pdf_generator_service.dart';
-import '../services/gemini_ai_service.dart';
-import '../widgets/raimble_record_button.dart';
 import '../widgets/dialogs/glass_dialog.dart';
 import '../widgets/dialogs/phase_editor.dart';
 import '../widgets/dialogs/task_editor.dart';
@@ -17,8 +16,7 @@ import 'session_dashboard.dart';
 
 class ClientProfileScreen extends ConsumerStatefulWidget {
   final Project clientProject;
-  const ClientProfileScreen({Key? key, required this.clientProject})
-    : super(key: key);
+  const ClientProfileScreen({super.key, required this.clientProject});
 
   @override
   _ClientProfileScreenState createState() => _ClientProfileScreenState();
@@ -42,6 +40,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     // Always read the LATEST version of this project from provider
     final project = ref
         .watch(projectsProvider)
@@ -49,8 +48,11 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
           (p) => p.id == widget.clientProject.id,
           orElse: () => widget.clientProject,
         );
-    final theme = Theme.of(context);
+    final subtasks = ref.watch(subtasksProvider);
     final users = ref.watch(systemUsersProvider);
+    final clientTypes = ref.watch(clientTypesProvider);
+    final currentUser = ref.watch(currentUserProvider);
+    final isAdminOnly = currentUser.role == UserRole.admin;
     final therapistName =
         users
             .where((u) => project.assignedTherapistIds.contains(u.id))
@@ -204,7 +206,7 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
         const SizedBox(height: 12),
 
         // Notes
-        if (project.notes.isNotEmpty)
+        if (project.notes.isNotEmpty && !ref.watch(currentUserProvider).role.name.contains('admin') && ref.watch(currentUserProvider).role != UserRole.admin)
           _buildSectionCard('Clinical Notes', Icons.notes, theme, [
             Text(
               project.notes,
@@ -212,6 +214,17 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
                 fontSize: 14,
                 color: theme.colorScheme.onSurface,
                 height: 1.5,
+              ),
+            ),
+          ]),
+        if (ref.watch(currentUserProvider).role == UserRole.admin && project.notes.isNotEmpty)
+          _buildSectionCard('Clinical Notes', Icons.lock_outline, theme, [
+            Text(
+              'Restricted Access: Clinical notes are only available to Therapists and Administrators.',
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: theme.hintColor,
+                fontStyle: FontStyle.italic,
               ),
             ),
           ]),
@@ -455,7 +468,6 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
   ) {
     final isCompleted = session.status == SessionStatus.completed;
     final isScheduled = session.status == SessionStatus.scheduled;
-    final isCancelled = session.status == SessionStatus.cancelled;
     final statusColor = isCompleted
         ? Colors.green
         : (isScheduled ? theme.primaryColor : Colors.grey);
@@ -469,10 +481,21 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => SessionDashboard(session: session)),
-        ),
+        onTap: () {
+          if (ref.read(currentUserProvider).role == UserRole.admin) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Admins do not have access to clinical session data.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => SessionDashboard(session: session)),
+          );
+        },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -680,249 +703,11 @@ class _ClientProfileScreenState extends ConsumerState<ClientProfileScreen>
     );
   }
 
-  void _showSessionDetail(BuildContext context, Session session) {
-    final theme = Theme.of(context);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        maxChildSize: 0.95,
-        minChildSize: 0.5,
-        builder: (ctx, scrollCtrl) => Container(
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            controller: scrollCtrl,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Handle
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: theme.dividerColor,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Header
-                Text(
-                  DateFormat('EEEE, d MMMM yyyy').format(session.date),
-                  style: GoogleFonts.outfit(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  '${session.type.name}  •  ${session.durationMinutes} min',
-                  style: GoogleFonts.outfit(color: theme.hintColor),
-                ),
-                const SizedBox(height: 16),
-                if (session.generalMood.isNotEmpty)
-                  _sessionSection(
-                    'General Mood',
-                    session.generalMood,
-                    Icons.mood,
-                    theme,
-                  ),
-                if (session.topics.isNotEmpty)
-                  _sessionSection(
-                    'Topics Covered',
-                    session.topics.map((t) => '• $t').join('\n'),
-                    Icons.topic,
-                    theme,
-                  ),
-                if (session.generalDiscussion.isNotEmpty)
-                  _sessionSection(
-                    'General Discussion',
-                    session.generalDiscussion,
-                    Icons.chat_bubble_outline,
-                    theme,
-                  ),
-                if (session.actionItems.isNotEmpty)
-                  _sessionSection(
-                    'Action Items',
-                    session.actionItems.map((a) => '✓ $a').join('\n'),
-                    Icons.task_alt,
-                    theme,
-                  ),
-                if (session.improvements.isNotEmpty)
-                  _sessionSection(
-                    'Improvements',
-                    session.improvements,
-                    Icons.trending_up,
-                    theme,
-                    color: Colors.green,
-                  ),
-                if (session.regressions.isNotEmpty)
-                  _sessionSection(
-                    'Areas of Concern',
-                    session.regressions,
-                    Icons.trending_down,
-                    theme,
-                    color: Colors.orange,
-                  ),
-                if (session.aiSummary.isNotEmpty)
-                  _sessionSection(
-                    'AI Summary',
-                    session.aiSummary,
-                    Icons.auto_awesome,
-                    theme,
-                    color: theme.primaryColor,
-                  ),
-                if (session.aiTopicsSummary.isNotEmpty)
-                  _sessionSection(
-                    'Progress Indicators',
-                    session.aiTopicsSummary,
-                    Icons.analytics,
-                    theme,
-                  ),
-                if (session.therapistNotes.isNotEmpty)
-                  _sessionSection(
-                    'Private Therapist Notes',
-                    session.therapistNotes,
-                    Icons.lock_outline,
-                    theme,
-                    color: Colors.purple,
-                  ),
-                if (session.clinicalReport.isNotEmpty)
-                  _sessionSection(
-                    'Clinical Session Report',
-                    session.clinicalReport,
-                    Icons.assignment_turned_in_outlined,
-                    theme,
-                    color: Colors.indigo,
-                  ),
-                if (session.isTranscribed &&
-                    session.transcriptText.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () =>
-                          _showFullTranscriptModal(context, session),
-                      icon: const Icon(Icons.description_outlined, size: 16),
-                      label: const Text('View Word-for-Word Transcription'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 80),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
-  void _showFullTranscriptModal(BuildContext context, Session session) {
-    final theme = Theme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.description_outlined, color: theme.primaryColor),
-            const SizedBox(width: 12),
-            Text(
-              'Full Transcription',
-              style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.scaffoldBackgroundColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: theme.dividerColor.withValues(alpha: 0.1),
-              ),
-            ),
-            child: Text(
-              session.transcriptText,
-              style: GoogleFonts.outfit(fontSize: 13, height: 1.6),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _sessionSection(
-    String title,
-    String content,
-    IconData icon,
-    ThemeData theme, {
-    Color? color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: color ?? theme.hintColor),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: GoogleFonts.outfit(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: color ?? theme.hintColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: (color ?? theme.primaryColor).withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(10),
-              border: Border(
-                left: BorderSide(
-                  color: (color ?? theme.primaryColor).withValues(alpha: 0.3),
-                  width: 3,
-                ),
-              ),
-            ),
-            child: Text(
-              content,
-              style: GoogleFonts.outfit(
-                fontSize: 14,
-                height: 1.5,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
+
+
 
   void _showAddSessionDialog(BuildContext context, Project project) {
     DateTime selectedDate = DateTime.now().add(const Duration(days: 7));

@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/clinic_settings.dart';
 import '../../providers/app_state.dart';
+import '../../theme/organic_palette.dart';
 
 class UserCreator extends ConsumerStatefulWidget {
-  const UserCreator({Key? key}) : super(key: key);
+  const UserCreator({super.key});
   @override
   _UserCreatorState createState() => _UserCreatorState();
 }
@@ -18,16 +19,7 @@ class _UserCreatorState extends ConsumerState<UserCreator> {
   UserRole _role = UserRole.therapist;
   Color _color = Colors.blue;
 
-  final List<Color> _palette = [
-    Colors.blue,
-    Colors.red,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.teal,
-    Colors.pink,
-    Colors.amber,
-  ];
+  final List<Color> _palette = OrganicPalette.colors;
 
   Future<void> _save() async {
     if (_firstCtrl.text.isEmpty || _emailCtrl.text.isEmpty) return;
