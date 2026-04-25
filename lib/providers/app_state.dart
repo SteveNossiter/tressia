@@ -55,7 +55,7 @@ class CurrentUserNotifier extends Notifier<AppUser> {
       associations: const [],
       qualifications: '',
       notes: '',
-      setupComplete: true, // assume true until loaded to avoid flash
+      setupComplete: false, // Must be false so we check DB status properly
     );
   }
 
@@ -180,11 +180,11 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
     return [];
   }
 
-  Future<void> cancelInvite(String id) async {
+  Future<void> cancelInvite(UserInvite invite) async {
     final oldState = state;
-    state = state.where((item) => item.id != id).toList();
+    state = state.where((item) => item.id != invite.id).toList();
     try {
-      await _repo.deleteInvite(id);
+      await _repo.deleteInvite(invite.id, authUserId: invite.authUserId);
     } catch (e) {
       state = oldState;
       debugPrint('InvitesNotifier.cancelInvite Error: $e');

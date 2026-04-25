@@ -234,6 +234,7 @@ class UserInvite {
   final String role;
   final String fullName;
   final String? actionLink;
+  final String? authUserId; // The account created in auth.users
   final String createdBy;
   final DateTime createdAt;
 
@@ -244,6 +245,7 @@ class UserInvite {
     required this.role,
     required this.fullName,
     this.actionLink,
+    this.authUserId,
     required this.createdBy,
     required this.createdAt,
   });
@@ -255,6 +257,7 @@ class UserInvite {
     String? role,
     String? fullName,
     String? actionLink,
+    String? authUserId,
     String? createdBy,
     DateTime? createdAt,
   }) {
@@ -265,6 +268,7 @@ class UserInvite {
       role: role ?? this.role,
       fullName: fullName ?? this.fullName,
       actionLink: actionLink ?? this.actionLink,
+      authUserId: authUserId ?? this.authUserId,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
     );

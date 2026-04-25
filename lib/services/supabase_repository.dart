@@ -317,12 +317,20 @@ class SupabaseRepository {
         role: data['role'],
         fullName: data['full_name'] ?? 'New Member',
         actionLink: data['action_link'],
+        authUserId: data['auth_user_id'], // Track the associated auth account
         createdBy: data['created_by'] ?? '',
         createdAt: DateTime.parse(data['created_at']),
       );
 
-  Future<void> deleteInvite(String id) async {
+  Future<void> deleteInvite(String id, {String? authUserId}) async {
     try {
+      // 1. If we have an associated auth user who hasn't accepted yet, purge them
+      if (authUserId != null && authUserId.isNotEmpty) {
+        print('TRESSIA_DEBUG: Rescinding invite — purging associated auth account $authUserId');
+        await _client.functions.invoke('delete-user', body: {'userId': authUserId});
+      }
+
+      // 2. Clear the invite record
       await _client.from('invites').delete().eq('id', id);
     } catch (e) {
       debugPrint('SupabaseRepository.deleteInvite Error: $e');
@@ -436,6 +444,18 @@ class SupabaseRepository {
       
     } catch (e) {
       debugPrint('SupabaseRepository.deleteUser Error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> acceptInvite() async {
+    try {
+      final res = await _client.functions.invoke('accept-invite');
+      if (res.status != 200) {
+        throw Exception('Failed to accept invite: ${res.data}');
+      }
+    } catch (e) {
+      debugPrint('SupabaseRepository.acceptInvite Error: $e');
       rethrow;
     }
   }

@@ -254,7 +254,7 @@ class _InviteCard extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () {
-              ref.read(invitesProvider.notifier).cancelInvite(invite.id);
+              ref.read(invitesProvider.notifier).cancelInvite(invite);
               Navigator.pop(ctx);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),

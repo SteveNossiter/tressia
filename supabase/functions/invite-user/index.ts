@@ -75,9 +75,12 @@ serve(async (req) => {
     if (linkError) throw linkError;
 
     const actionLink = linkData.properties?.action_link;
+    const invitedUserId = linkData.user?.id; // Capture the actual user ID created/updated in Auth
+    
     if (!actionLink) throw new Error('Supabase failed to return a link');
 
     // Send Email via Resend
+    // ... (rest of fetch logic)
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (resendApiKey) {
       await fetch('https://api.resend.com/emails', {
@@ -108,6 +111,7 @@ serve(async (req) => {
       role: role,
       full_name: fullName,
       action_link: actionLink,
+      auth_user_id: invitedUserId, // Store the ID for future total deletion
       created_by: user.id
     }, { onConflict: 'clinic_id,email' });
 

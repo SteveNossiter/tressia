@@ -93,8 +93,12 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
     try {
       final currentUser = ref.read(currentUserProvider);
       final currentClinic = ref.read(clinicSettingsProvider);
+      final repo = SupabaseRepository();
 
-      // Save Personal Details
+      // 1. Formalise invitation migration
+      await repo.acceptInvite();
+
+      // 2. Save Personal Details
       await Supabase.instance.client.from('users').update({
         'full_name': '${_userFirstNameCtrl.text} ${_userLastNameCtrl.text}'.trim(),
         'phone': _userPhoneCtrl.text.trim(),
@@ -104,7 +108,7 @@ class _ClinicSetupScreenState extends ConsumerState<ClinicSetupScreen> {
         'setup_complete': true,
       }).eq('id', currentUser.id);
 
-      // Save Clinic Details (if admin and NOT yet setup)
+      // 3. Save Clinic Details (if admin and NOT yet setup)
       if (currentUser.isAdmin && !currentClinic.setupComplete) {
         await Supabase.instance.client.from('clinics').update({
           'name': _nameCtrl.text,

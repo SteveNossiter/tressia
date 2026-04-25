@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS public.invites (
     role TEXT NOT NULL,
     full_name TEXT DEFAULT 'New Member',
     action_link TEXT,
+    auth_user_id UUID, -- Links to the account created in auth.users
     created_by UUID REFERENCES public.users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(clinic_id, email)
