@@ -137,28 +137,54 @@ class _InviteCard extends ConsumerWidget {
                 ),
                 if (invite.actionLink != null && invite.actionLink!.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: TextButton.icon(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-                        minimumSize: const Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 0.15)),
                       ),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: invite.actionLink!));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Invite link copied to clipboard!')),
-                        );
-                      },
-                      icon: const Icon(Icons.copy, size: 14),
-                      label: Text(
-                        'COPY INVITE LINK',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.link, size: 14, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Text(
+                            'LINK READY',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(width: 1, height: 12, color: Colors.blue.withValues(alpha: 0.2)),
+                          const SizedBox(width: 12),
+                          InkWell(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: invite.actionLink!));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Invite link copied to clipboard!')),
+                              );
+                            },
+                            child: Row(
+                              children: [
+                                const Icon(Icons.copy, size: 14, color: Colors.blue),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'COPY',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   )

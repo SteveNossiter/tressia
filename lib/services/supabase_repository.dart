@@ -337,66 +337,56 @@ class SupabaseRepository {
     required String fullName,
   }) async {
     try {
-      // 1. Log the invite in our database for the trigger to pick up later
+      final currentUser = _client.auth.currentUser;
+      if (currentUser == null) throw Exception('No active session. Please log in again.');
+
+      // 1. Log the invite in our database immediately
+      // This ensures the UI populates "instantly" with a pending tile.
       await _client.from('invites').upsert({
         'clinic_id': clinicId,
         'email': email,
         'role': role,
         'full_name': fullName,
-        'created_by': _client.auth.currentUser?.id,
+        'created_by': currentUser.id,
       }, onConflict: 'clinic_id,email');
 
-      // 2. Trigger the Edge Function to send the actual Auth email
-      try {
-        final session = _client.auth.currentSession;
-        if (session == null) throw Exception('No active session. Please log in again.');
+      // 2. Trigger the Edge Function to generate the link and send email
+      // We pass the redirectTo based on the current environment
+      final redirectTo = Uri.base.origin.contains('localhost') 
+          ? '${Uri.base.origin}/' 
+          : 'https://tressia.pages.dev/';
 
-        // Passing the token in the URL query to avoid CORS preflight "allowed headers" issues 
-        // and bypassing the ES256 gateway algorithm block.
-        final uri = Uri.parse('https://dfwpvvppdnpyrvnoccni.supabase.co/functions/v1/invite-user')
-            .replace(queryParameters: {'token': session.accessToken});
+      print('TRESSIA_DEBUG: Invoking invite-user function for $email...');
+      
+      final response = await _client.functions.invoke(
+        'invite-user',
+        body: {
+          'email': email,
+          'role': role,
+          'clinicId': clinicId,
+          'fullName': fullName,
+          'redirectTo': redirectTo,
+        },
+      );
 
-        // Ensure we redirect back to wherever the app is currently running (localhost vs prod)
-        final redirectTo = Uri.base.origin.contains('localhost') 
-            ? '${Uri.base.origin}/' 
-            : 'https://tressia.pages.dev/';
-
-        final response = await http.post(
-          uri,
-          headers: {
-            'Content-Type': 'application/json',
-            'apiKey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmd3B2dnBwZG5weXJ2bm9jY25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODU3NTksImV4cCI6MjA5MDA2MTc1OX0.vzZM5Hiubg9KaxBmGfFfHy6m3vYE2X8dVSndHRfkLlA',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmd3B2dnBwZG5weXJ2bm9jY25pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODU3NTksImV4cCI6MjA5MDA2MTc1OX0.vzZM5Hiubg9KaxBmGfFfHy6m3vYE2X8dVSndHRfkLlA',
-          },
-          body: jsonEncode({
-            'email': email,
-            'role': role,
-            'clinicId': clinicId,
-            'fullName': fullName,
-            'redirectTo': redirectTo,
-          }),
-        );
-
-        final data = jsonDecode(response.body);
-        print('TRESSIA_DEBUG: Edge Function Result Status: ${response.statusCode}');
-        print('TRESSIA_DEBUG: Edge Function Result Data: $data');
-
-        if (response.statusCode == 200 && data['action_link'] != null) {
-          final link = data['action_link'] as String;
-          print('TRESSIA_DEBUG: Link generated: $link');
-          
+      print('TRESSIA_DEBUG: Edge Function Result Status: ${response.status}');
+      
+      if (response.status == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final link = (data['action_link'] ?? data['inviteLink']) as String?;
+        
+        if (link != null) {
+          print('TRESSIA_DEBUG: Link received: $link');
+          // Update the local record one last time to be sure (Edge function also does this)
           await _client.from('invites').update({'action_link': link}).eq('clinic_id', clinicId).eq('email', email);
-          
           return link;
-        } else {
-           print('TRESSIA_DEBUG: Edge Function Failed: ${data['error'] ?? 'No action_link returned'}');
         }
-      } catch (fError) {
-        print('TRESSIA_DEBUG: Edge Function Error: $fError');
+      } else {
+        print('TRESSIA_DEBUG_ERROR: Edge Function failed with status ${response.status}: ${response.data}');
       }
       return null;
     } catch (e) {
-      print('TRESSIA_DEBUG: inviteUser Exception: $e');
+      print('TRESSIA_DEBUG_ERROR: inviteUser Exception: $e');
       rethrow;
     }
   }
