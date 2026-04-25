@@ -57,7 +57,7 @@ serve(async (req) => {
     )
 
     // 4. Generate the invite link directly
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+    let { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'invite',
       email: email,
       options: {
@@ -70,6 +70,25 @@ serve(async (req) => {
         }
       }
     });
+
+    if (linkError && linkError.message.toLowerCase().includes('already been registered')) {
+      console.log(`TRESSIA_DEBUG: User ${email} already exists in Auth. Generating magic link instead.`);
+      const { data: magicData, error: magicError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: {
+          redirectTo: redirectTo ?? 'https://tressia.pages.dev/',
+        }
+      });
+      
+      if (magicError) {
+        console.error(`TRESSIA_DEBUG_ERROR: Failed to generate magic link fallback:`, magicError);
+        throw magicError;
+      }
+      
+      linkData = magicData;
+      linkError = null;
+    }
 
     if (linkError) {
       console.error(`TRESSIA_DEBUG_ERROR: Failed to generate link for ${email}:`, linkError);
