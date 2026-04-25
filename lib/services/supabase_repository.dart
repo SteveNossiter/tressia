@@ -371,20 +371,25 @@ class SupabaseRepository {
 
       print('TRESSIA_DEBUG: Edge Function Result Status: ${response.status}');
       
-      if (response.status == 200) {
+      if (response.status == 200 && response.data != null) {
         final data = response.data as Map<String, dynamic>;
         final link = (data['action_link'] ?? data['inviteLink']) as String?;
         
         if (link != null) {
           print('TRESSIA_DEBUG: Link received: $link');
-          // Update the local record one last time to be sure (Edge function also does this)
           await _client.from('invites').update({'action_link': link}).eq('clinic_id', clinicId).eq('email', email);
           return link;
+        } else {
+          print('TRESSIA_DEBUG_ERROR: Response successful but action_link is missing in ${response.data}');
         }
       } else {
-        print('TRESSIA_DEBUG_ERROR: Edge Function failed with status ${response.status}: ${response.data}');
+        final errDetails = response.data != null ? response.data.toString() : 'No response body';
+        print('TRESSIA_DEBUG_ERROR: Edge Function failed with status ${response.status}. Details: $errDetails');
       }
       return null;
+    } on FunctionException catch (fe) {
+      print('TRESSIA_DEBUG_ERROR: FunctionException: [${fe.status}] ${fe.details}');
+      rethrow;
     } catch (e) {
       print('TRESSIA_DEBUG_ERROR: inviteUser Exception: $e');
       rethrow;

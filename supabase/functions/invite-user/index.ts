@@ -7,7 +7,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS Pre-flight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -22,95 +21,68 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Missing authentication token' }), { status: 401, headers: corsHeaders })
     }
 
-    // 1. Initialize client with user token to verify permissions
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: `Bearer ${userToken}` } } }
     )
 
-    // Verify user identity
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
     if (userError || !user) {
-      console.error(`TRESSIA_DEBUG_ERROR: Auth failure: ${userError?.message}`);
       return new Response(JSON.stringify({ error: 'Unauthorized user token' }), { status: 401, headers: corsHeaders })
     }
 
-    // 2. Verify user has permission (Admin/Administrator role)
-    const { data: profile, error: profileError } = await supabaseClient
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile || !['admin', 'administrator'].includes(profile.role.toLowerCase())) {
-      console.warn(`TRESSIA_DEBUG_WARNING: User ${user.id} attempted to invite without admin rights.`);
-      return new Response(JSON.stringify({ error: 'Insufficient permissions to invite users' }), { status: 403, headers: corsHeaders })
+    // Verify Admin permission
+    const { data: profile } = await supabaseClient.from('users').select('role').eq('id', user.id).single()
+    if (!profile || !['admin', 'administrator'].includes(profile.role.toLowerCase())) {
+      return new Response(JSON.stringify({ error: 'Insufficient permissions' }), { status: 403, headers: corsHeaders })
     }
 
-    console.log(`TRESSIA_DEBUG: Admin ${user.id} inviting ${fullName} (${email}) as ${role} for clinic ${clinicId}`);
-
-    // 3. Create Admin Client (Uses service role to perform admin actions)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 4. Generate the invite link directly
+    console.log(`TRESSIA_DEBUG: Admin ${user.id} inviting ${email}`);
+
+    // Try 'invite' link generation
     let { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'invite',
       email: email,
       options: {
         redirectTo: redirectTo ?? 'https://tressia.pages.dev/',
-        data: { 
-          role: role,
-          clinic_id: clinicId,
-          full_name: fullName,
-          needs_password_setup: true
-        }
+        data: { role, clinic_id: clinicId, full_name: fullName }
       }
     });
 
-    if (linkError && linkError.message.toLowerCase().includes('already been registered')) {
-      console.log(`TRESSIA_DEBUG: User ${email} already exists in Auth. Generating magic link instead.`);
+    // Fallback if user already exists
+    if (linkError && (linkError.status === 422 || linkError.message.toLowerCase().includes('already') || linkError.message.toLowerCase().includes('registered'))) {
+      console.log(`TRESSIA_DEBUG: User ${email} exists. Generating login link instead.`);
       const { data: magicData, error: magicError } = await supabaseAdmin.auth.admin.generateLink({
         type: 'magiclink',
         email: email,
-        options: {
-          redirectTo: redirectTo ?? 'https://tressia.pages.dev/',
-        }
+        options: { redirectTo: redirectTo ?? 'https://tressia.pages.dev/' }
       });
       
-      if (magicError) {
-        console.error(`TRESSIA_DEBUG_ERROR: Failed to generate magic link fallback:`, magicError);
+      if (!magicError) {
+        linkData = magicData;
+        linkError = null;
+      } else {
         throw magicError;
       }
-      
-      linkData = magicData;
-      linkError = null;
     }
 
-    if (linkError) {
-      console.error(`TRESSIA_DEBUG_ERROR: Failed to generate link for ${email}:`, linkError);
-      throw linkError;
-    }
+    if (linkError) throw linkError;
 
     const actionLink = linkData.properties?.action_link;
-    if (!actionLink) {
-      throw new Error('Supabase failed to return an action link');
-    }
+    if (!actionLink) throw new Error('Supabase failed to return a link');
 
-    console.log(`TRESSIA_DEBUG: Invite link generated successfully`);
-
-    // 5. Send the email via Resend
+    // Send Email via Resend
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (resendApiKey) {
-      const resendResponse = await fetch('https://api.resend.com/emails', {
+      await fetch('https://api.resend.com/emails', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from: 'Silvana Nossiter <sil@createtherapy.com.au>',
           to: email,
@@ -118,56 +90,34 @@ serve(async (req) => {
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #2D3748;">
               <h2 style="color: #4A5568;">Welcome to Tressia!</h2>
-              <p style="font-size: 16px;">You have been invited to join the clinic team as a <strong>${role}</strong>.</p>
-              <p style="font-size: 16px;">Click the button below to set up your professional profile and password:</p>
+              <p>You have been invited to join the clinic team as a <strong>${role}</strong>.</p>
               <div style="margin: 32px 0;">
-                <a href="${actionLink}" style="background-color: #38BDF8; color: white; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">Join Tressia Team</a>
+                <a href="${actionLink}" style="background-color: #38BDF8; color: white; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">Click To Join</a>
               </div>
-              <p style="color: #718096; font-size: 14px; margin-top: 40px;">If the button above doesn't work, copy and paste this link into your browser:<br><br>${actionLink}</p>
-              <div style="border-top: 1px solid #E2E8F0; margin-top: 40px; padding-top: 20px;">
-                 <p style="font-size: 12px; color: #A0AEC0;">This invite was sent from Tressia on behalf of your clinic administrator.</p>
-              </div>
+              <p style="color: #718096; font-size: 12px;">Link: ${actionLink}</p>
             </div>
           `
         })
       });
-
-      if (!resendResponse.ok) {
-        const resendErr = await resendResponse.text();
-        console.error(`TRESSIA_DEBUG_ERROR: Resend API failed: ${resendErr}`);
-      }
     }
 
-    // 6. Final Update: Persist the link in our public.invites table
-    // We use upsert here to be absolutely sure the record exists with the link
-    const { error: dbError } = await supabaseAdmin
-      .from('invites')
-      .upsert({ 
-        clinic_id: clinicId,
-        email: email,
-        role: role,
-        full_name: fullName,
-        action_link: actionLink,
-        created_by: user.id
-      }, { onConflict: 'clinic_id,email' });
-
-    if (dbError) {
-      console.error(`TRESSIA_DEBUG_ERROR: DB update failed: ${dbError.message}`);
-      // We don't throw here because the link was generated and email sent, 
-      // we still want to return the link to the client.
-    }
-
-    return new Response(JSON.stringify({ 
-      success: true, 
+    // Persist in invites table
+    await supabaseAdmin.from('invites').upsert({ 
+      clinic_id: clinicId,
+      email: email,
+      role: role,
+      full_name: fullName,
       action_link: actionLink,
-      inviteLink: actionLink // Providing both for compatibility
-    }), {
+      created_by: user.id
+    }, { onConflict: 'clinic_id,email' });
+
+    return new Response(JSON.stringify({ success: true, action_link: actionLink, inviteLink: actionLink }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
 
   } catch (error: any) {
-    console.error(`TRESSIA_DEBUG_CATCH: ${error.message}`);
+    console.error(`TRESSIA_DEBUG_ERROR: ${error.message}`);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
