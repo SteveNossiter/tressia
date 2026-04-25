@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/app_state.dart';
 import '../models/clinic_settings.dart';
+import '../services/supabase_repository.dart';
 import '../widgets/dialogs/user_creator.dart';
 import '../widgets/dialogs/glass_dialog.dart';
 
