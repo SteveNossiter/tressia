@@ -1114,11 +1114,13 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
     ThemeData theme, {
     int maxLines = 1,
     TextInputType? keyboard,
+    void Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: keyboard,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         filled: true,
