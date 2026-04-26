@@ -324,17 +324,25 @@ class SupabaseRepository {
 
   Future<void> deleteInvite(String id, {String? authUserId, String? email}) async {
     try {
-      // 1. If we have an associated auth user who hasn't accepted yet, purge them
-      if ((authUserId != null && authUserId.isNotEmpty) || (email != null && email.isNotEmpty)) {
-        print('TRESSIA_DEBUG: Rescinding invite — purging associated auth account (id:$authUserId, email:$email)');
-        await _client.functions.invoke('delete-user', body: {
-          'userId': authUserId,
-          'email': email,
-        });
+      // 1. Attempt to purge from Supabase Auth (Native via Edge Function)
+      // We wrap this in a sub-try-catch because even if the auth purge fails,
+      // we MUST proceed to delete the record from our database so the UI clears.
+      try {
+        if ((authUserId != null && authUserId.isNotEmpty) || (email != null && email.isNotEmpty)) {
+          print('TRESSIA_DEBUG: Rescinding invite — purging associated auth account (id:$authUserId, email:$email)');
+          await _client.functions.invoke('delete-user', body: {
+            'userId': authUserId,
+            'email': email,
+          });
+        }
+      } catch (authErr) {
+        debugPrint('TRESSIA_DEBUG_ERROR: Auth purge during rescind failed: $authErr');
+        // We continue anyway...
       }
 
-      // 2. Clear the invite record
+      // 2. Clear the invite record from our local table
       await _client.from('invites').delete().eq('id', id);
+      print('TRESSIA_DEBUG: Invite record deleted from database.');
     } catch (e) {
       debugPrint('SupabaseRepository.deleteInvite Error: $e');
       rethrow;

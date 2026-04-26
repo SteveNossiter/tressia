@@ -26,34 +26,43 @@ serve(async (req) => {
     // Fallback: If no ID but we have an email, look them up in auth
     if (!targetId && email) {
       console.log(`TRESSIA_DEBUG: No ID provided, searching for user by email: ${email}`);
-      const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-      if (!listError) {
-        const found = users.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
-        if (found) targetId = found.id;
+      const { data, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      if (!listError && data?.users) {
+        const found = data.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+        if (found) {
+          targetId = found.id;
+          console.log(`TRESSIA_DEBUG: Found user ID ${targetId} for email ${email}`);
+        }
+      } else if (listError) {
+        console.error('TRESSIA_DEBUG_ERROR: listUsers failed:', listError);
       }
     }
 
     if (!targetId) {
-      console.log('TRESSIA_DEBUG: No user found to delete. Skipping.');
-      return new Response(JSON.stringify({ success: true, message: 'User not found, nothing to delete' }), {
+      console.log('TRESSIA_DEBUG: No user ID identified for deletion. This might be because the user was already purged or never created. Proceeding with success.');
+      return new Response(JSON.stringify({ success: true, message: 'Nothing to delete' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       })
     }
 
-    console.log(`TRESSIA_DEBUG: Attempting to delete user ${targetId} completely from system`);
+    console.log(`TRESSIA_DEBUG: Attempting to delete user ${targetId}`);
 
     // Deleting from auth.users securely wipes them from the system and cascades to public.users!
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(targetId)
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetId)
 
-    if (error) {
-      // If user doesn't exist, that's fine (already deleted)
-      if (error.message?.includes('not found') || error.status === 404) {
-        console.log(`TRESSIA_DEBUG: User ${targetId} already gone.`);
-      } else {
-        console.error(`TRESSIA_DEBUG_ERROR: Failed to delete user ${targetId}:`, error);
-        throw error;
+    if (deleteError) {
+      // If user doesn't exist (404), that is a success for us!
+      if (deleteError.status === 404 || deleteError.message?.toLowerCase().includes('not found')) {
+        console.log(`TRESSIA_DEBUG: User ${targetId} already purged.`);
+        return new Response(JSON.stringify({ success: true, message: 'Already purged' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        })
       }
+      
+      console.error(`TRESSIA_DEBUG_ERROR: Failed to delete user ${targetId}:`, deleteError);
+      throw deleteError;
     }
 
     console.log(`TRESSIA_DEBUG_SUCCESS: User ${targetId} fully purged from system.`);
