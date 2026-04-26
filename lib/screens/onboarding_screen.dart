@@ -17,11 +17,9 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  final _picker = ImagePicker();
+  bool _isLoading = false;
   List<UserAssociation> _userAssociations = [];
   Color _selectedColor = Colors.purple;
-  String? _base64ProfilePic;
-  bool _isLoading = false;
 
   late TextEditingController _passwordCtrl, _confirmPasswordCtrl;
   late TextEditingController _userFirstNameCtrl, _userLastNameCtrl, _userPhoneCtrl, _userAddressCtrl, _userEmailCtrl;
@@ -71,15 +69,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
-  Future<void> _pickProfilePic() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512);
-    if (image != null) {
-      final bytes = await image.readAsBytes();
-      setState(() {
-        _base64ProfilePic = base64Encode(bytes);
-      });
-    }
-  }
 
   Future<void> _completeSetup() async {
     // Basic Validation
@@ -128,7 +117,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         'address': _userAddressCtrl.text.trim(),
         'email': _userEmailCtrl.text.trim(),
         'user_color': hexColor,
-        'profile_pic': _base64ProfilePic,
         'associations': _userAssociations.map((e) => e.toJson()).toList(),
         'setup_complete': true,
       }).eq('id', userId ?? '');
@@ -224,34 +212,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           // 2. IDENTITY
                           _subHeader(theme, 'Personal Identity'),
                           const SizedBox(height: 16),
-                          Center(
-                            child: Stack(
-                              children: [
-                                CircleAvatar(
-                                  radius: 50,
-                                  backgroundColor: _selectedColor.withValues(alpha: 0.2),
-                                  backgroundImage: _base64ProfilePic != null 
-                                    ? MemoryImage(base64Decode(_base64ProfilePic!))
-                                    : null,
-                                  child: _base64ProfilePic == null 
-                                    ? Icon(Icons.person_outline, size: 40, color: _selectedColor)
-                                    : null,
-                                ),
-                                Positioned(
-                                  bottom: 0,
-                                  right: 0,
-                                  child: GestureDetector(
-                                    onTap: _pickProfilePic,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(color: theme.primaryColor, shape: BoxShape.circle),
-                                      child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                           const SizedBox(height: 24),
                           Row(
                             children: [
