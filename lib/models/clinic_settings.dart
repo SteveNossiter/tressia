@@ -246,6 +246,7 @@ class UserInvite {
     required this.email,
     required this.role,
     required this.fullName,
+    this.phone,
     this.actionLink,
     this.authUserId,
     required this.createdBy,
