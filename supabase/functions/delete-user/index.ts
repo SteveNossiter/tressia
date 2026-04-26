@@ -26,15 +26,13 @@ serve(async (req) => {
     // Fallback: If no ID but we have an email, look them up in auth
     if (!targetId && email) {
       console.log(`TRESSIA_DEBUG: No ID provided, searching for user by email: ${email}`);
-      const { data, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-      if (!listError && data?.users) {
-        const found = data.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
-        if (found) {
-          targetId = found.id;
-          console.log(`TRESSIA_DEBUG: Found user ID ${targetId} for email ${email}`);
-        }
-      } else if (listError) {
-        console.error('TRESSIA_DEBUG_ERROR: listUsers failed:', listError);
+      const { data: userData, error: fetchError } = await supabaseAdmin.auth.admin.getUserByEmail(email);
+      
+      if (!fetchError && userData?.user) {
+        targetId = userData.user.id;
+        console.log(`TRESSIA_DEBUG: Found user ID ${targetId} for email ${email}`);
+      } else if (fetchError) {
+        console.log(`TRESSIA_DEBUG: Could not find user by email ${email}: ${fetchError.message}`);
       }
     }
 
