@@ -59,35 +59,6 @@ class AuthGate extends ConsumerStatefulWidget {
 
 class _AuthGateState extends ConsumerState<AuthGate> {
   Timer? _inactivityTimer;
-  bool _isProcessingInvite = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkForInviteToken();
-  }
-
-  void _checkForInviteToken() {
-    final fragment = Uri.base.fragment;
-    if (fragment.contains('access_token=')) {
-      print('TRESSIA_DEBUG: landing with access_token (invite/magiclink).');
-      setState(() => _isProcessingInvite = true);
-      
-      // If we are already logged in as a DIFFERENT user, sign out 
-      // so the new token from the URL can be digested properly.
-      final currentEmail = Supabase.instance.client.auth.currentUser?.email;
-      if (currentEmail != null) {
-         print('TRESSIA_DEBUG: Overriding existing session for $currentEmail');
-         Supabase.instance.client.auth.signOut();
-      }
-
-      // Allow 5 seconds for Supabase to digest the fragment and emit a SIGNED_IN event
-      // before we show the login screen as fallback.
-      Future.delayed(const Duration(seconds: 5), () {
-        if (mounted) setState(() => _isProcessingInvite = false);
-      });
-    }
-  }
 
   void _resetTimer() {
     _inactivityTimer?.cancel();
@@ -104,21 +75,6 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isProcessingInvite) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 24),
-              Text('Finalising your invitation...', style: Theme.of(context).textTheme.bodyLarge),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Listener(
       onPointerDown: (_) => _resetTimer(),
       onPointerMove: (_) => _resetTimer(),
@@ -126,26 +82,51 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       child: StreamBuilder<AuthState>(
         stream: Supabase.instance.client.auth.onAuthStateChange,
         builder: (context, snapshot) {
-          _resetTimer(); // Reset on auth state change (login)
+          _resetTimer();
 
-          final session = snapshot.data?.session ??
-              Supabase.instance.client.auth.currentSession;
-          final user = session?.user ??
-              Supabase.instance.client.auth.currentUser;
+          final fragment = Uri.base.fragment;
+          final hasToken = fragment.contains('access_token=');
+          
+          final session = snapshot.data?.session ?? Supabase.instance.client.auth.currentSession;
+          final user = session?.user ?? Supabase.instance.client.auth.currentUser;
+          final event = snapshot.data?.event;
 
-          print('TRESSIA_DEBUG: AuthGate State - session=${session != null}, userEmail=${user?.email}');
-          if (user != null) {
-            print('TRESSIA_DEBUG: userMetadata = ${user.userMetadata}');
+          print('TRESSIA_DEBUG: AuthGate - session:${session != null}, event:$event, hasToken:$hasToken');
+
+          // 1. If we have a token and NO session yet, show the spinner. 
+          // Stay here until the SDK parses the token and emits SIGNED_IN or INITIAL_SESSION with a session.
+          if (hasToken && session == null) {
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 24),
+                    Text('Finalising your invitation...', style: Theme.of(context).textTheme.bodyLarge),
+                    const SizedBox(height: 8),
+                    const Text('This may take a few seconds', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    const SizedBox(height: 32),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const AuthScreen())),
+                      child: const Text('Taking too long? Go to login'),
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
 
+          // 2. If we have a session, proceed to check setup status
           if (session != null && user?.emailConfirmedAt != null) {
-            // Check if they are locked in a password setup state (legacy flag)
             final needsPasswordSetup = user?.userMetadata?['needs_password_setup'] == true;
             if (needsPasswordSetup) {
               return const OnboardingScreen();
             }
             return const SetupGate(child: HomeScreen());
           }
+
+          // 3. Only show login if there's no session AND no pending token in the URL
           return const AuthScreen();
         },
       ),
