@@ -61,16 +61,42 @@ class CurrentUserNotifier extends Notifier<AppUser> {
 
   Future<void> _fetchUser(String userId) async {
     try {
-      final data = await Supabase.instance.client
+      final userResponse = await Supabase.instance.client
           .from('users')
           .select()
           .eq('id', userId)
           .maybeSingle();
-      if (data != null) {
-        state = _mapToAppUser(data);
+      
+      if (userResponse != null) {
+        state = _mapToAppUser(userResponse);
       } else {
-        // User record doesn't exist or RLS blocked it
-        debugPrint('TRESSIA DEBUG: _fetchUser returned null for userId=$userId');
+        // User record doesn't exist. Check if they are an invitee to get sticky info.
+        final authEmail = Supabase.instance.client.auth.currentUser?.email;
+        if (authEmail != null) {
+          final inviteResponse = await Supabase.instance.client
+              .from('invites')
+              .select()
+              .ilike('email', authEmail)
+              .maybeSingle();
+          
+          if (inviteResponse != null) {
+            final fullName = inviteResponse['full_name'] ?? '';
+            final parts = fullName.split(' ');
+            final first = parts.isNotEmpty ? parts.first : '';
+            final last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+            state = state.copyWith(
+              name: fullName,
+              firstName: first,
+              lastName: last,
+              email: authEmail,
+              clinicId: inviteResponse['clinic_id'],
+              role: _parseUserRole(inviteResponse['role']),
+              setupComplete: false,
+            );
+            debugPrint('TRESSIA DEBUG: Sticky invite info loaded for $authEmail');
+          }
+        }
       }
     } catch (e) {
       debugPrint('TRESSIA DEBUG: _fetchUser error: $e');
@@ -78,6 +104,13 @@ class CurrentUserNotifier extends Notifier<AppUser> {
   }
 
   void setUser(AppUser u) => state = u;
+
+  UserRole _parseUserRole(String? roleStr) {
+    final rStr = (roleStr ?? '').toLowerCase();
+    if (rStr == 'administrator') return UserRole.administrator;
+    if (rStr == 'admin') return UserRole.admin;
+    return UserRole.therapist;
+  }
 
   Future<void> completeSetup() async {
     await Supabase.instance.client
@@ -222,11 +255,7 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
   String first = parts.isNotEmpty ? parts.first : '';
   String last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
-  UserRole role = UserRole.therapist;
-  final roleStr = (data['role'] ?? '').toString().toLowerCase();
-  if (roleStr == 'administrator') role = UserRole.administrator;
-  else if (roleStr == 'admin') role = UserRole.admin;
-  else role = UserRole.therapist;
+  UserRole role = _parseTopLevelRole(data['role']);
 
   // Parse color from hex string, default to purple
   Color userColor = Colors.purple;
@@ -264,6 +293,13 @@ AppUser _mapToAppUser(Map<String, dynamic> data) {
     notes: data['notes'] ?? '',
     setupComplete: data['setup_complete'] ?? false,
   );
+}
+
+UserRole _parseTopLevelRole(String? roleStr) {
+  final rStr = (roleStr ?? '').toLowerCase();
+  if (rStr == 'administrator') return UserRole.administrator;
+  if (rStr == 'admin') return UserRole.admin;
+  return UserRole.therapist;
 }
 
 // =============================================

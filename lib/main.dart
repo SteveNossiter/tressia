@@ -7,8 +7,7 @@ import 'theme/app_theme.dart';
 import 'providers/app_state.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
-import 'screens/password_setup_screen.dart';
-import 'screens/clinic_setup_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/encryption_service.dart';
 
 // IMPORTANT: Supabase URL and Anon / Publishable Key
@@ -96,10 +95,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           }
 
           if (session != null && user?.emailConfirmedAt != null) {
+            // Check if they are locked in a password setup state (legacy flag)
             final needsPasswordSetup = user?.userMetadata?['needs_password_setup'] == true;
-            print('TRESSIA_DEBUG: needsPasswordSetup = $needsPasswordSetup');
             if (needsPasswordSetup) {
-              return const PasswordSetupScreen();
+              return const OnboardingScreen();
             }
             return const SetupGate(child: HomeScreen());
           }
@@ -125,7 +124,7 @@ class _SetupGateState extends ConsumerState<SetupGate> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 6), () {
+    Future.delayed(const Duration(seconds: 8), () {
       if (mounted) {
         _runDiagnostics();
         setState(() => _timedOut = true);
@@ -149,31 +148,15 @@ class _SetupGateState extends ConsumerState<SetupGate> {
           .maybeSingle();
 
       if (response == null) {
-        _debugInfo = 'Auth OK (${authUser.id}), but users table returned NULL.\n'
-            'This means RLS is blocking the read or no row exists.';
+        _debugInfo = 'Auth OK, but users table returned NULL.\n'
+            'Checking if you are a pending invitee...';
       } else {
-        _debugInfo = 'Data found: clinic_id=${response['clinic_id']}, '
-            'role=${response['role']}';
+        _debugInfo = 'Data found: role=${response['role']}';
       }
     } catch (e) {
       _debugInfo = 'Fetch error: $e';
     }
     if (mounted) setState(() {});
-  }
-
-  Future<void> _retry() async {
-    setState(() {
-      _timedOut = false;
-      _debugInfo = '';
-    });
-    // Force re-fetch
-    ref.invalidate(currentUserProvider);
-    ref.invalidate(clinicSettingsProvider);
-    await Future.delayed(const Duration(seconds: 6));
-    if (mounted) {
-      await _runDiagnostics();
-      setState(() => _timedOut = true);
-    }
   }
 
   @override
@@ -182,7 +165,11 @@ class _SetupGateState extends ConsumerState<SetupGate> {
     final clinic = ref.watch(clinicSettingsProvider);
 
     // Wait for data to load
-    if (user.clinicId.isEmpty || clinic.id.isEmpty) {
+    // Note: clinicId might be empty if they are an invitee, 
+    // in which case OnboardingScreen handles the migration.
+    final isLoading = user.name == 'Loading...' || (user.clinicId.isNotEmpty && clinic.id.isEmpty);
+
+    if (isLoading) {
       if (_timedOut) {
         return Scaffold(
           body: Center(
@@ -193,44 +180,16 @@ class _SetupGateState extends ConsumerState<SetupGate> {
                 children: [
                   const Icon(Icons.error_outline, size: 48, color: Colors.orange),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Unable to load your account data.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  const Text('Unable to load account data.', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  Text(
-                    _debugInfo.isNotEmpty ? _debugInfo : 'Running diagnostics...',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'userId="${user.id}"',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                  ),
+                  Text(_debugInfo, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.grey)),
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      ElevatedButton(
-                        onPressed: _retry,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('RETRY'),
-                      ),
+                      ElevatedButton(onPressed: () => ref.invalidate(currentUserProvider), child: const Text('RETRY')),
                       const SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: () => Supabase.instance.client.auth.signOut(),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('LOG OUT'),
-                      ),
+                      ElevatedButton(onPressed: () => Supabase.instance.client.auth.signOut(), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text('LOG OUT')),
                     ],
                   ),
                 ],
@@ -241,12 +200,11 @@ class _SetupGateState extends ConsumerState<SetupGate> {
       }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    // Data is loaded, check if setup is complete
-    if (!user.setupComplete || !clinic.setupComplete) {
-      return ClinicSetupScreen();
+    // Direct to onboarding if setup is incomplete
+    if (!user.setupComplete) {
+      return const OnboardingScreen();
     }
 
     return widget.child;
   }
 }
-
