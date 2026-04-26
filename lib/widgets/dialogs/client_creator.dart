@@ -43,10 +43,11 @@ class _ClientCreatorDialogState extends ConsumerState<ClientCreatorDialog> {
   final _pcPhoneCtrl = TextEditingController();
   final _pcEmailCtrl = TextEditingController();
 
-  final _cmhFirstCtrl = TextEditingController(); // CMH
+  final _cmhFirstCtrl = TextEditingController(); // Custom Contact
   final _cmhLastCtrl = TextEditingController();
   final _cmhPhoneCtrl = TextEditingController();
   final _cmhEmailCtrl = TextEditingController();
+  final _cmhRoleCtrl = TextEditingController(text: 'Support Coordinator');
 
   // Emergency contact (all types)
   final _ecFirstCtrl = TextEditingController();
@@ -99,6 +100,7 @@ class _ClientCreatorDialogState extends ConsumerState<ClientCreatorDialog> {
       _cmhLastCtrl,
       _cmhPhoneCtrl,
       _cmhEmailCtrl,
+      _cmhRoleCtrl,
       _ecFirstCtrl,
       _ecLastCtrl,
       _ecPhoneCtrl,
@@ -164,7 +166,7 @@ class _ClientCreatorDialogState extends ConsumerState<ClientCreatorDialog> {
             lastName: _cmhLastCtrl.text.trim(),
             phone: _cmhPhoneCtrl.text.trim(),
             email: _cmhEmailCtrl.text.trim(),
-            role: 'CMH Coordinator',
+            role: _cmhRoleCtrl.text.trim(),
           ),
         if (_ecFirstCtrl.text.isNotEmpty)
           Contact(
@@ -564,8 +566,8 @@ class _ClientCreatorDialogState extends ConsumerState<ClientCreatorDialog> {
           ),
           const SizedBox(height: 20),
         ],
-        _sectionLabel('Community Mental Health (CMH) Contact', theme),
-        const SizedBox(height: 8),
+        _field('Contact Type (e.g. Support Coordinator, Family)', _cmhRoleCtrl, theme),
+        const SizedBox(height: 12),
         _contactFields(
           _cmhFirstCtrl,
           _cmhLastCtrl,
