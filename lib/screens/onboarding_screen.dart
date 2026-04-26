@@ -29,20 +29,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    final user = ref.read(currentUserProvider);
-
     _passwordCtrl = TextEditingController();
     _confirmPasswordCtrl = TextEditingController();
+    _userFirstNameCtrl = TextEditingController();
+    _userLastNameCtrl = TextEditingController();
+    _userPhoneCtrl = TextEditingController();
+    _userAddressCtrl = TextEditingController();
+    _userEmailCtrl = TextEditingController();
+
+    // Initial population
+    _populateFields();
+  }
+
+  void _populateFields() {
+    final user = ref.read(currentUserProvider);
+    if (user.id.isEmpty && user.email.isEmpty) return; // Still loading
+
+    _userFirstNameCtrl.text = user.firstName;
+    _userLastNameCtrl.text = user.lastName;
+    _userPhoneCtrl.text = user.phone;
+    _userAddressCtrl.text = user.address;
+    _userEmailCtrl.text = user.email;
     
-    _userFirstNameCtrl = TextEditingController(text: user.firstName);
-    _userLastNameCtrl = TextEditingController(text: user.lastName);
-    _userPhoneCtrl = TextEditingController(text: user.phone);
-    _userAddressCtrl = TextEditingController(text: user.address);
-    _userEmailCtrl = TextEditingController(text: user.email);
-    _userAssociations = user.associations.isEmpty 
-        ? [UserAssociation(name: 'ANZACATA', membershipNumber: '')]
-        : List.from(user.associations);
-    _selectedColor = user.userColor;
+    setState(() {
+      _userAssociations = user.associations.isEmpty 
+          ? [UserAssociation(name: 'ANZACATA', membershipNumber: '')]
+          : List.from(user.associations);
+      _selectedColor = user.userColor;
+    });
   }
 
   @override
@@ -150,6 +164,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Listen for data arriving after initialization (Riverpod 2 style)
+    ref.listen(currentUserProvider, (prev, next) {
+      if (next.firstName.isNotEmpty && _userFirstNameCtrl.text.isEmpty) {
+        _populateFields();
+      }
+    });
     
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,

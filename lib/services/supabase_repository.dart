@@ -316,6 +316,7 @@ class SupabaseRepository {
         email: data['email'],
         role: data['role'],
         fullName: data['full_name'] ?? 'New Member',
+        phone: data['phone'],
         actionLink: data['action_link'],
         authUserId: data['auth_user_id'], // Track the associated auth account
         createdBy: data['created_by'] ?? '',
@@ -354,6 +355,7 @@ class SupabaseRepository {
     required String role,
     required String clinicId,
     required String fullName,
+    String? phone,
   }) async {
     try {
       final currentUser = _client.auth.currentUser;
@@ -366,6 +368,7 @@ class SupabaseRepository {
         'email': email,
         'role': role,
         'full_name': fullName,
+        'phone': phone,
         'created_by': currentUser.id,
       }, onConflict: 'clinic_id,email');
 
@@ -384,6 +387,7 @@ class SupabaseRepository {
           'role': role,
           'clinicId': clinicId,
           'fullName': fullName,
+          'phone': phone,
           'redirectTo': redirectTo,
         },
       );

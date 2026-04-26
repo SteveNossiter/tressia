@@ -85,15 +85,16 @@ class CurrentUserNotifier extends Notifier<AppUser> {
             final first = parts.isNotEmpty ? parts.first : '';
             final last = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
-            state = state.copyWith(
-              name: fullName,
-              firstName: first,
-              lastName: last,
-              email: authEmail,
-              clinicId: inviteResponse['clinic_id'],
-              role: _parseUserRole(inviteResponse['role']),
-              setupComplete: false,
-            );
+              state = state.copyWith(
+                name: fullName,
+                firstName: first,
+                lastName: last,
+                email: authEmail,
+                phone: inviteResponse['phone'], // Added phone!
+                clinicId: inviteResponse['clinic_id'],
+                role: _parseUserRole(inviteResponse['role']),
+                setupComplete: false,
+              );
             debugPrint('TRESSIA DEBUG: Sticky invite info loaded for $authEmail');
           }
         }
@@ -161,6 +162,7 @@ class SystemUsersNotifier extends Notifier<List<AppUser>> {
         role: u.role.name,
         clinicId: currentUser.clinicId,
         fullName: u.name,
+        phone: u.phone,
       );
       // Force refresh of pending invites to instantly display the link
       ref.invalidate(invitesProvider);

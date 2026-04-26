@@ -56,6 +56,7 @@ serve(async (req) => {
     // They found an invite. Map them to public.users!
     const { error: insertError } = await supabaseAdmin.from('users').insert({
       id: user.id,
+      email: user.email, // CRITICAL: Include email so auto-purge triggers recognize this user!
       clinic_id: invite.clinic_id,
       full_name: invite.full_name || 'Staff Member',
       role: invite.role,

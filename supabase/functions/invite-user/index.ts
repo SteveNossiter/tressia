@@ -15,7 +15,7 @@ serve(async (req) => {
     const url = new URL(req.url)
     const userToken = url.searchParams.get('token') || req.headers.get('X-Tressia-Token') || req.headers.get('Authorization')?.split(' ')[1]
     const body = await req.json()
-    const { email, role, clinicId, fullName, redirectTo } = body
+    const { email, role, clinicId, fullName, phone, redirectTo } = body
 
     if (!userToken) {
       return new Response(JSON.stringify({ error: 'Missing authentication token' }), { status: 401, headers: corsHeaders })
@@ -43,7 +43,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    console.log(`TRESSIA_DEBUG: Admin ${user.id} inviting ${email}`);
+    console.log(`TRESSIA_DEBUG: Admin ${user.id} inviting ${email} (Phone: ${phone})`);
 
     // Try 'invite' link generation
     let { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
@@ -80,7 +80,6 @@ serve(async (req) => {
     if (!actionLink) throw new Error('Supabase failed to return a link');
 
     // Send Email via Resend
-    // ... (rest of fetch logic)
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (resendApiKey) {
       await fetch('https://api.resend.com/emails', {
@@ -110,8 +109,9 @@ serve(async (req) => {
       email: email,
       role: role,
       full_name: fullName,
+      phone: phone, // Save the phone number
       action_link: actionLink,
-      auth_user_id: invitedUserId, // Store the ID for future total deletion
+      auth_user_id: invitedUserId, 
       created_by: user.id
     }, { onConflict: 'clinic_id,email' });
 
@@ -128,4 +128,3 @@ serve(async (req) => {
     })
   }
 })
-

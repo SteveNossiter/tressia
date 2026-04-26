@@ -234,6 +234,7 @@ class UserInvite {
   final String email;
   final String role;
   final String fullName;
+  final String? phone;
   final String? actionLink;
   final String? authUserId; // The account created in auth.users
   final String createdBy;
@@ -257,6 +258,7 @@ class UserInvite {
     String? email,
     String? role,
     String? fullName,
+    String? phone,
     String? actionLink,
     String? authUserId,
     String? createdBy,
@@ -268,6 +270,7 @@ class UserInvite {
       email: email ?? this.email,
       role: role ?? this.role,
       fullName: fullName ?? this.fullName,
+      phone: phone ?? this.phone,
       actionLink: actionLink ?? this.actionLink,
       authUserId: authUserId ?? this.authUserId,
       createdBy: createdBy ?? this.createdBy,
