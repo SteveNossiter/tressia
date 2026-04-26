@@ -184,7 +184,11 @@ class InvitesNotifier extends Notifier<List<UserInvite>> {
     final oldState = state;
     state = state.where((item) => item.id != invite.id).toList();
     try {
-      await _repo.deleteInvite(invite.id, authUserId: invite.authUserId);
+      await _repo.deleteInvite(
+        invite.id,
+        authUserId: invite.authUserId,
+        email: invite.email,
+      );
     } catch (e) {
       state = oldState;
       debugPrint('InvitesNotifier.cancelInvite Error: $e');

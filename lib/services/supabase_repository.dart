@@ -322,12 +322,15 @@ class SupabaseRepository {
         createdAt: DateTime.parse(data['created_at']),
       );
 
-  Future<void> deleteInvite(String id, {String? authUserId}) async {
+  Future<void> deleteInvite(String id, {String? authUserId, String? email}) async {
     try {
       // 1. If we have an associated auth user who hasn't accepted yet, purge them
-      if (authUserId != null && authUserId.isNotEmpty) {
-        print('TRESSIA_DEBUG: Rescinding invite — purging associated auth account $authUserId');
-        await _client.functions.invoke('delete-user', body: {'userId': authUserId});
+      if ((authUserId != null && authUserId.isNotEmpty) || (email != null && email.isNotEmpty)) {
+        print('TRESSIA_DEBUG: Rescinding invite — purging associated auth account (id:$authUserId, email:$email)');
+        await _client.functions.invoke('delete-user', body: {
+          'userId': authUserId,
+          'email': email,
+        });
       }
 
       // 2. Clear the invite record

@@ -17,9 +17,6 @@ class _UserCreatorState extends ConsumerState<UserCreator> {
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   UserRole _role = UserRole.therapist;
-  Color _color = Colors.blue;
-
-  final List<Color> _palette = OrganicPalette.colors;
 
   Future<void> _save() async {
     if (_firstCtrl.text.isEmpty || _emailCtrl.text.isEmpty) return;
@@ -36,7 +33,7 @@ class _UserCreatorState extends ConsumerState<UserCreator> {
               firstName: _firstCtrl.text.trim(),
               lastName: _lastCtrl.text.trim(),
               role: _role,
-              userColor: _color,
+              userColor: Colors.purple, // Default to purple for invitees
               email: _emailCtrl.text.trim(),
               phone: _phoneCtrl.text.trim(),
               startDate: DateTime.now(),
@@ -135,47 +132,6 @@ class _UserCreatorState extends ConsumerState<UserCreator> {
                       if (v != null) setState(() => _role = v);
                     },
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Calendar Colour',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      color: theme.hintColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: _palette
-                        .map(
-                          (c) => GestureDetector(
-                            onTap: () => setState(() => _color = c),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: c,
-                                shape: BoxShape.circle,
-                                border: _color.value == c.value
-                                    ? Border.all(
-                                        color: theme.colorScheme.onSurface,
-                                        width: 2,
-                                      )
-                                    : null,
-                              ),
-                              child: _color.value == c.value
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 16,
-                                      color: Colors.white,
-                                    )
-                                  : null,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -196,7 +152,7 @@ class _UserCreatorState extends ConsumerState<UserCreator> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'The user will receive an email invitation to set up their password and 2FA.',
+                            'The user will receive an email invitation to set up their password, signature colour, and 2FA.',
                             style: GoogleFonts.outfit(
                               fontSize: 11,
                               color: theme.hintColor,
