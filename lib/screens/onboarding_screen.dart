@@ -315,7 +315,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           ),
 
                           const SizedBox(height: 64),
-                          SizedBox(
+                        SizedBox(
                             width: double.infinity,
                             height: 56,
                             child: ElevatedButton(
@@ -323,8 +323,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: theme.primaryColor,
                                 foregroundColor: Colors.white,
-                                cornerRadius: 16,
                                 elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               ),
                               child: Text('COMPLETE PROFILE & START', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                             ),
@@ -361,15 +361,4 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
   );
-}
-
-extension on ElevatedButton {
-  ButtonStyle styleFrom({required Color backgroundColor, required Color foregroundColor, required double cornerRadius, required double elevation}) {
-    return ElevatedButton.styleFrom(
-      backgroundColor: backgroundColor,
-      foregroundColor: foregroundColor,
-      elevation: elevation,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cornerRadius)),
-    );
-  }
 }

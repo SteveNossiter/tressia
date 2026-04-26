@@ -96,6 +96,7 @@ class AppUser {
   }
 
   AppUser copyWith({
+    String? clinicId,
     String? name,
     String? firstName,
     String? lastName,
@@ -115,7 +116,7 @@ class AppUser {
   }) =>
       AppUser(
         id: id,
-        clinicId: clinicId,
+        clinicId: clinicId ?? this.clinicId,
         name: name ?? this.name,
         firstName: firstName ?? this.firstName,
         lastName: lastName ?? this.lastName,
