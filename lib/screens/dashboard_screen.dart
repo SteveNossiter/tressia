@@ -73,8 +73,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // =====================================================
   void _openPhaseEditor(Project p) =>
       showGlassDialog(context, PhaseEditor(project: p));
-  void _openTaskEditor(ProjectTask t) =>
+  void _openTaskEditor(ProjectTask t) {
+    if (t.id.startsWith('session_')) {
+      final sessionId = t.id.replaceFirst('session_', '');
+      final session = ref.read(sessionsProvider).firstWhere((s) => s.id == sessionId);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => SessionDashboard(session: session)),
+      );
+    } else {
       showGlassDialog(context, TaskEditor(task: t));
+    }
+  }
   void _openSubtaskEditor(Subtask s) =>
       showGlassDialog(context, SubtaskEditor(subtask: s));
 
@@ -154,6 +164,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           }
         }
       }
+      
+      final sessions = ref.read(sessionsProvider);
+      final phaseSessions = sessions.where((s) => s.clientId == item.id);
+      for (final s in phaseSessions) {
+        if (s.status == SessionStatus.scheduled) {
+          outstanding.add('Session: ${s.type.name.toUpperCase()} (${DateFormat('d MMM').format(s.date)})');
+        }
+      }
     } else if (item is ProjectTask) {
       final taskSubs = subtasks.where((s) => s.taskId == item.id);
       for (final s in taskSubs) {
@@ -216,6 +234,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  TaskStatus _mapSessionStatus(SessionStatus s) {
+    switch (s) {
+      case SessionStatus.scheduled:
+        return TaskStatus.todo;
+      case SessionStatus.completed:
+        return TaskStatus.done;
+      case SessionStatus.cancelled:
+      case SessionStatus.noShow:
+        return TaskStatus.done;
+    }
+  }
+
   // Derive the correct parent status from a list of child statuses.
   // Rules:
   //  - Any child inProgress → parent inProgress
@@ -260,14 +290,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final tasks = ref.read(tasksProvider);
     final projects = ref.read(projectsProvider);
 
+    final sessions = ref.read(sessionsProvider);
     final parentPhase = projects.where((p) => p.id == projectId).firstOrNull;
     if (parentPhase == null) return;
 
     final phaseTasks = tasks.where((t) => t.projectId == projectId).toList();
-    if (phaseTasks.isEmpty) return;
+    final phaseSessions = sessions.where((s) => s.clientId == projectId).toList();
+    if (phaseTasks.isEmpty && phaseSessions.isEmpty) return;
 
-    // Derived: follow children's status
-    final derivedStatus = _deriveParentStatus(phaseTasks.map((t) => t.status).toList());
+    // Derived: follow children's status (tasks and sessions)
+    final allStatuses = [
+      ...phaseTasks.map((t) => t.status),
+      ...phaseSessions.map((s) => _mapSessionStatus(s.status)),
+    ];
+    final derivedStatus = _deriveParentStatus(allStatuses);
 
     // Sticky Logic: If manual inProgress, don't move to done even if tasks are complete
     if (derivedStatus == TaskStatus.done && parentPhase.status == TaskStatus.inProgress) {
@@ -297,6 +333,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             if (s.status != TaskStatus.done) {
               ref.read(subtasksProvider.notifier).updateSubtask(s.copyWith(status: TaskStatus.done));
             }
+          }
+        }
+        
+        final sessions = ref.read(sessionsProvider);
+        final phaseSessions = sessions.where((s) => s.clientId == item.id);
+        for (final s in phaseSessions) {
+          if (s.status == SessionStatus.scheduled) {
+            ref.read(sessionsProvider.notifier).updateSession(s.copyWith(status: SessionStatus.completed));
           }
         }
         // No reconciliation needed — we just set everything to Done.
@@ -330,6 +374,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       // Reconcile upward: task fully derived from subtasks, phase auto-completes only
       _reconcileTaskFromSubtasks(item.taskId);
+    } else if (item is ProjectTask && item.id.startsWith('session_')) {
+      final sessionId = item.id.replaceFirst('session_', '');
+      final session = ref.read(sessionsProvider).firstWhere((s) => s.id == sessionId);
+      SessionStatus nextSessionStatus = SessionStatus.scheduled;
+      if (next == TaskStatus.done) {
+        nextSessionStatus = SessionStatus.completed;
+      }
+      ref.read(sessionsProvider.notifier).updateSession(session.copyWith(status: nextSessionStatus));
     }
   }
 
@@ -442,11 +494,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             tasks.any((t) => t.id == s.taskId)).toList()
         : allSubtasks;
 
+    final allSessions = ref.watch(sessionsProvider);
+    final sessionTasks = allSessions.map((s) {
+      final status = _mapSessionStatus(s.status);
+      final startDate = s.date;
+      // Use planned duration if available
+      final endDate = s.date.add(Duration(minutes: s.durationMinutes));
+      
+      return ProjectTask(
+        id: 'session_${s.id}',
+        projectId: s.clientId,
+        title: 'Session: ${s.type.name.toUpperCase()}',
+        description: s.therapistNotes,
+        status: status,
+        startDate: startDate,
+        endDate: endDate,
+        color: theme.primaryColor, // Matching theme primary for official sessions
+        assignedUserIds: s.therapistIds,
+      );
+    }).toList();
+
+    // Combined tasks for filtering
+    final combinedTasks = [...tasks, ...sessionTasks];
+
     // Global Smart Search Logic
     final query = _searchQuery.toLowerCase();
 
     // 1. Filter Tasks
-    final filteredTasks = tasks.where((t) {
+    final filteredTasks = combinedTasks.where((t) {
       if (query.isEmpty) return true;
       final tMatches = t.title.toLowerCase().contains(query);
       final sMatches = subtasks
@@ -459,7 +534,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final filteredSubtasks = subtasks.where((s) {
       if (query.isEmpty) return true;
       final sMatches = s.title.toLowerCase().contains(query);
-      final tMatches = tasks.any(
+      final tMatches = combinedTasks.any(
         (t) => t.id == s.taskId && t.title.toLowerCase().contains(query),
       );
       return sMatches || tMatches;

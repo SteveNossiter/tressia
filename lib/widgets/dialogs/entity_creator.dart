@@ -393,18 +393,6 @@ class _EntityCreatorState extends ConsumerState<EntityCreator> {
           _startTime?.minute ?? 0,
         );
 
-        // Add as subtask (Kanban/Gantt only shows tasks/subtasks)
-        await ref.read(subtasksProvider.notifier).addSubtask(
-              Subtask(
-                taskId: therapyTask.id,
-                title: _titleCtrl.text,
-                description: _descCtrl.text,
-                startDate: combinedDate,
-                endDate: combinedDate.add(const Duration(hours: 1)),
-                color: _color,
-              ),
-            );
-
         // Add actual session
         await ref.read(sessionsProvider.notifier).addSession(
               Session(

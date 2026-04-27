@@ -254,6 +254,42 @@ class _SessionDashboardState extends ConsumerState<SessionDashboard> {
     );
   }
 
+  void _deleteSession() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Delete Session permanently?',
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'This will permanently remove this session and all associated notes from the database. This action cannot be undone.',
+          style: GoogleFonts.outfit(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Go Back'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ref.read(sessionsProvider.notifier).removeSession(_session.id);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Session deleted permanently.')),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _formatDuration(int seconds) {
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
@@ -297,6 +333,14 @@ class _SessionDashboardState extends ConsumerState<SessionDashboard> {
         actions: [
           if (!_sessionFinished) ...[
             TextButton.icon(
+              onPressed: _deleteSession,
+              icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+              label: Text(
+                'Delete',
+                style: GoogleFonts.outfit(color: Colors.red),
+              ),
+            ),
+            TextButton.icon(
               onPressed: _cancelSession,
               icon: const Icon(
                 Icons.cancel_outlined,
@@ -304,7 +348,7 @@ class _SessionDashboardState extends ConsumerState<SessionDashboard> {
                 color: Colors.red,
               ),
               label: Text(
-                'Cancel',
+                'Reschedule', // Changed from Cancel to Reschedule as it opens reschedule dialog
                 style: GoogleFonts.outfit(color: Colors.red),
               ),
             ),
