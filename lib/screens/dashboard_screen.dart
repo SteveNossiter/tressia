@@ -241,6 +241,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (siblings.isEmpty) return; // No subtasks → don't override manual task status
 
     final derivedStatus = _deriveParentStatus(siblings.map((s) => s.status).toList());
+
+    // Sticky Logic: If manual inProgress, don't move to done even if subtasks are complete
+    if (derivedStatus == TaskStatus.done && parentTask.status == TaskStatus.inProgress) {
+      _reconcilePhaseFromTasks(parentTask.projectId);
+      return;
+    }
+
     if (parentTask.status != derivedStatus) {
       ref.read(tasksProvider.notifier).updateTask(parentTask.copyWith(status: derivedStatus));
     }
@@ -261,6 +268,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Derived: follow children's status
     final derivedStatus = _deriveParentStatus(phaseTasks.map((t) => t.status).toList());
+
+    // Sticky Logic: If manual inProgress, don't move to done even if tasks are complete
+    if (derivedStatus == TaskStatus.done && parentPhase.status == TaskStatus.inProgress) {
+      return;
+    }
 
     if (parentPhase.status != derivedStatus) {
       ref.read(projectsProvider.notifier).updateProject(parentPhase.copyWith(status: derivedStatus));
@@ -304,12 +316,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           }
         }
       } else {
-        // Non-Done: set it (reconcile below may override from subtasks)
+        // Manual inProgress/todo → STICKY. Just set it.
         ref.read(tasksProvider.notifier).updateTask(item.copyWith(status: next));
       }
 
-      // Task status is fully derived from subtasks (if subtasks exist).
-      // Phase only auto-completes (never overrides manual inProgress/todo).
+      // Reconcile upward: cascade status changes if needed
       _reconcileTaskFromSubtasks(item.id);
       _reconcilePhaseFromTasks(item.projectId);
 

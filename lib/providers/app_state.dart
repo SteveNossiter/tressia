@@ -14,11 +14,18 @@ final currentUserProvider = NotifierProvider<CurrentUserNotifier, AppUser>(
   () => CurrentUserNotifier(),
 );
 
+final supabaseAuthProvider = StreamProvider<AuthState>((ref) {
+  return Supabase.instance.client.auth.onAuthStateChange;
+});
+
 class CurrentUserNotifier extends Notifier<AppUser> {
   StreamSubscription? _sub;
 
   @override
   AppUser build() {
+    // Watch auth changes so this provider resets on login/logout
+    ref.watch(supabaseAuthProvider);
+    
     final authUser = Supabase.instance.client.auth.currentUser;
     _sub?.cancel();
 
